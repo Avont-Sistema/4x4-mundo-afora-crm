@@ -19,6 +19,8 @@ export default function WhatsAppPage() {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
+  const [contactPhone, setContactPhone] = useState('+5511988887777');
+  const [contactName, setContactName] = useState('');
 
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
@@ -40,8 +42,8 @@ export default function WhatsAppPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: inputValue,
-          leadId: 'current-lead',
-          clientId: null,
+          phone: contactPhone,
+          contactName: contactName || undefined,
         }),
       });
 
@@ -55,6 +57,12 @@ export default function WhatsAppPage() {
           timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         };
         setMessages((prev) => [...prev, botMessage]);
+        if (data.leadCreated) {
+          toast.success('🎯 Novo lead cadastrado automaticamente pela IA!');
+        }
+        if (data.aiEnabled === false) {
+          // aviso discreto só na primeira vez
+        }
       } else {
         toast.error(data.error || 'Erro ao enviar mensagem');
       }
@@ -72,10 +80,28 @@ export default function WhatsAppPage() {
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Chat Area */}
         <div className="lg:col-span-2 card flex flex-col h-[600px]">
-          <div className="flex items-center gap-2 mb-4 pb-4 border-b border-gray-200">
+          <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-200">
             <MessageCircle className="w-6 h-6 text-blue-600" />
             <h2 className="text-lg font-bold">Chat com IA</h2>
             <span className="ml-auto text-sm text-green-600 font-medium">● Online</span>
+          </div>
+
+          {/* Simulação de contato (testa o auto-cadastro de lead) */}
+          <div className="flex flex-wrap gap-2 mb-3 pb-3 border-b border-gray-100">
+            <input
+              type="text"
+              placeholder="Telefone do contato (ex: +5511988887777)"
+              value={contactPhone}
+              onChange={(e) => setContactPhone(e.target.value)}
+              className="input flex-1 min-w-[180px] !py-1.5 text-sm"
+            />
+            <input
+              type="text"
+              placeholder="Nome (opcional)"
+              value={contactName}
+              onChange={(e) => setContactName(e.target.value)}
+              className="input flex-1 min-w-[140px] !py-1.5 text-sm"
+            />
           </div>
 
           {/* Messages */}

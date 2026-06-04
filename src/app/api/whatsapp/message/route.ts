@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { findLeadByPhone, upsertLeadFromContact } from '@/lib/leadsStore';
 
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
-});
+const apiKey = process.env.ANTHROPIC_API_KEY || '';
+const client = apiKey ? new Anthropic({ apiKey }) : null;
 
 // Mock de expedições disponíveis
 const expeditions = [
@@ -48,53 +48,91 @@ REGRAS:
 
 Responda em português brasileiro e seja conciso.`;
 
+// Detecta interesse em alguma expedição pela mensagem
+function detectInterest(message: string): string | undefined {
+  const m = message.toLowerCase();
+  const found = expeditions.find((e) =>
+    m.includes(e.name.toLowerCase().split(' ')[0])
+  );
+  return found?.name;
+}
+
+// Resposta sem IA (fallback quando não há ANTHROPIC_API_KEY configurada)
+function fallbackReply(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('preço') || m.includes('valor') || m.includes('quanto')) {
+    return `Nossas expedições:\n${expeditions
+      .map((e) => `• ${e.name}: R$ ${e.price.toLocaleString('pt-BR')} (${e.date})`)
+      .join('\n')}\n\nQual te interessa? Posso já reservar pra você. 🚙`;
+  }
+  if (m.includes('próxima') || m.includes('proxima') || m.includes('expedi') || m.includes('disponí')) {
+    return `A próxima é a *${expeditions[0].name}* (${expeditions[0].date}) por R$ ${expeditions[0].price.toLocaleString('pt-BR')}. ${expeditions[0].description}. Quer garantir sua vaga?`;
+  }
+  if (m.includes('pagar') || m.includes('pagamento') || m.includes('link') || m.includes('reserv')) {
+    return 'Perfeito! Para gerar seu link de pagamento seguro preciso confirmar: nome completo, email e a expedição escolhida. Pode me passar?';
+  }
+  return 'Olá! 👋 Sou o assistente da 4x4 Mundo Afora. Posso te falar sobre nossas expedições, valores e já reservar sua vaga. O que você procura?';
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { message, leadId, clientId } = body;
+    const { message, phone, contactName, clientId } = body;
 
     if (!message) {
-      return NextResponse.json(
-        { error: 'Message is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Mensagem é obrigatória' }, { status: 400 });
     }
 
-    // Chamar Claude API
-    const response = await client.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: message,
-        },
-      ],
-    });
+    // --- Auto-cadastro de lead ---------------------------------------------
+    // Toda nova mensagem de um telefone desconhecido vira um novo lead,
+    // atendido pela IA. Telefones já conhecidos apenas atualizam a última msg.
+    let leadCreated = false;
+    let lead = null;
+    if (phone) {
+      const existing = findLeadByPhone(phone);
+      const result = upsertLeadFromContact({
+        name: contactName || existing?.name || phone,
+        phone,
+        whatsapp: phone,
+        source: 'whatsapp',
+        stage: 'novo',
+        handledBy: 'ia',
+        interest: detectInterest(message),
+        lastMessage: message,
+        notes: 'Lead criado automaticamente pelo bot do WhatsApp',
+      });
+      lead = result.lead;
+      leadCreated = result.created;
+    }
 
-    const botMessage = response.content[0].type === 'text' ? response.content[0].text : '';
-
-    // Registrar interação (mock - em produção salvar no DB)
-    console.log({
-      timestamp: new Date(),
-      leadId,
-      clientId,
-      userMessage: message,
-      botResponse: botMessage,
-    });
+    // --- Resposta da IA ----------------------------------------------------
+    let botMessage: string;
+    if (client) {
+      const response = await client.messages.create({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: message }],
+      });
+      botMessage =
+        response.content[0].type === 'text' ? response.content[0].text : '';
+    } else {
+      botMessage = fallbackReply(message);
+    }
 
     return NextResponse.json({
       success: true,
       message: botMessage,
       timestamp: new Date(),
-      leadId,
+      leadCreated,
+      lead,
       clientId,
+      aiEnabled: Boolean(client),
     });
   } catch (error: any) {
     console.error('WhatsApp API error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to process message' },
+      { error: error.message || 'Falha ao processar mensagem' },
       { status: 500 }
     );
   }

@@ -26,10 +26,13 @@ model Lead {
   email       String?
   phone       String?
   whatsapp    String?
-  source      String   // website, instagram, referral, etc
-  status      String   @default("novo") // novo, qualificado, em_negociacao, perdido, convertido
+  source      String   // whatsapp, google_ads, meta_ads, instagram, website, referral, manual, other
+  stage       String   @default("novo") // novo, em_atendimento, proposta_enviada, sem_resposta, finalizado
+  handledBy   String   @default("manual") // ia, manual
+  interest    String?  // expedição de interesse
+  value       Float?   // valor estimado do negócio
   notes       String?
-  conversions Int      @default(0)
+  lastMessage String?  // última mensagem recebida (WhatsApp)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

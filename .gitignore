@@ -30,6 +30,9 @@ yarn-error.log*
 .env*.local
 .vercel
 
+# Local JSON data store (dev only)
+.data
+
 # IDE
 .vscode
 .idea

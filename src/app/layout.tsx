@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
+import { Toaster } from "react-hot-toast";
 import "./globals.css";
 
 const geist = Geist({
@@ -18,7 +19,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body className={geist.className}>{children}</body>
+      <body className={geist.className}>
+        {children}
+        <Toaster position="top-right" />
+      </body>
     </html>
   );
 }
