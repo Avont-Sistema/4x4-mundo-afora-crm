@@ -1,268 +1,332 @@
 'use client';
 
-import { useState } from 'react';
-import { Plus, Edit2, Trash2, MapPin, Users } from 'lucide-react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+import { Plus, MapPin, Users, X, TrendingUp, RefreshCw } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { formatBRL, formatDate } from '@/lib/format';
 
+interface Finance {
+  totalParticipants: number;
+  contractedRevenue: number;
+  revenueGoal: number;
+  totalPaid: number;
+  totalCost: number;
+  profit: number;
+  profitMargin: number;
+  paymentProgress: number;
+}
 interface Expedition {
   id: string;
-  name: string;
-  description?: string;
-  startDate: string;
-  endDate: string;
-  location: string;
-  maxPeople: number;
+  routeName: string;
+  location?: string;
+  startDate?: string;
+  endDate?: string;
+  slots: number;
   pricePerPerson: number;
-  difficulty: 'fácil' | 'intermediária' | 'difícil';
+  pricePerChild: number;
+  revenueGoal: number;
+  status: string;
+  finance: Finance;
 }
 
-const mockExpeditions: Expedition[] = [
-  {
-    id: '1',
-    name: 'Lençóis Maranhenses',
-    description: 'Aventura pelos lençóis brancos e lagoas cristalinas',
-    startDate: '2024-07-15',
-    endDate: '2024-07-20',
-    location: 'Maranhão',
-    maxPeople: 12,
-    pricePerPerson: 2500,
-    difficulty: 'intermediária',
-  },
-  {
-    id: '2',
-    name: 'Vale da Lua',
-    description: 'Exploração do canyon e cachoeiras',
-    startDate: '2024-08-01',
-    endDate: '2024-08-05',
-    location: 'Goiás',
-    maxPeople: 15,
-    pricePerPerson: 1800,
-    difficulty: 'fácil',
-  },
-];
+const statusColors: Record<string, string> = {
+  planejamento: 'bg-gray-100 text-gray-700',
+  aberta: 'bg-blue-100 text-blue-700',
+  em_andamento: 'bg-emerald-100 text-emerald-700',
+  finalizada: 'bg-purple-100 text-purple-700',
+};
+const statusLabels: Record<string, string> = {
+  planejamento: 'Planejamento',
+  aberta: 'Aberta',
+  em_andamento: 'Em Andamento',
+  finalizada: 'Finalizada',
+};
 
-const difficultyColors = {
-  fácil: 'bg-green-100 text-green-800',
-  intermediária: 'bg-yellow-100 text-yellow-800',
-  difícil: 'bg-red-100 text-red-800',
+const emptyForm = {
+  routeName: '',
+  description: '',
+  location: '',
+  startDate: '',
+  endDate: '',
+  slots: 12,
+  pricePerPerson: 0,
+  pricePerChild: 0,
+  revenueGoal: 0,
+  status: 'planejamento',
 };
 
 export default function ExpeditionsPage() {
-  const [expeditions, setExpeditions] = useState<Expedition[]>(mockExpeditions);
+  const [expeditions, setExpeditions] = useState<Expedition[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    startDate: '',
-    endDate: '',
-    location: '',
-    maxPeople: 10,
-    pricePerPerson: 0,
-    difficulty: 'intermediária' as 'fácil' | 'intermediária' | 'difícil',
-  });
+  const [form, setForm] = useState(emptyForm);
 
-  const handleAddExpedition = () => {
-    if (editingId) {
-      setExpeditions(expeditions.map((e) => (e.id === editingId ? { ...formData, id: e.id } : e)));
-      setEditingId(null);
-    } else {
-      setExpeditions([...expeditions, { ...formData, id: Date.now().toString() }]);
+  const fetchExpeditions = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/expeditions');
+      const data = await res.json();
+      setExpeditions(data.expeditions || []);
+    } catch {
+      toast.error('Erro ao carregar expedições');
+    } finally {
+      setLoading(false);
     }
-    setFormData({
-      name: '',
-      description: '',
-      startDate: '',
-      endDate: '',
-      location: '',
-      maxPeople: 10,
-      pricePerPerson: 0,
-      difficulty: 'intermediária',
-    });
-    setShowForm(false);
-  };
+  }, []);
 
-  const handleDeleteExpedition = (id: string) => {
-    setExpeditions(expeditions.filter((e) => e.id !== id));
-  };
+  useEffect(() => {
+    fetchExpeditions();
+  }, [fetchExpeditions]);
 
-  const handleEditExpedition = (expedition: Expedition) => {
-    setFormData({
-      name: expedition.name,
-      description: expedition.description || '',
-      startDate: expedition.startDate,
-      endDate: expedition.endDate,
-      location: expedition.location,
-      maxPeople: expedition.maxPeople,
-      pricePerPerson: expedition.pricePerPerson,
-      difficulty: expedition.difficulty,
-    });
-    setEditingId(expedition.id);
-    setShowForm(true);
+  const projectedRevenue =
+    form.revenueGoal > 0 ? form.revenueGoal : form.slots * form.pricePerPerson;
+
+  const create = async () => {
+    if (!form.routeName.trim()) {
+      toast.error('Informe o nome do roteiro');
+      return;
+    }
+    try {
+      const res = await fetch('/api/expeditions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setExpeditions((e) => [data.expedition, ...e]);
+        setShowForm(false);
+        setForm(emptyForm);
+        toast.success('Expedição criada!');
+      } else {
+        toast.error(data.error || 'Erro ao criar');
+      }
+    } catch {
+      toast.error('Erro ao criar expedição');
+    }
   };
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-4xl font-bold">Expedições</h1>
-        <button
-          onClick={() => {
-            setShowForm(!showForm);
-            setEditingId(null);
-            setFormData({
-              name: '',
-              description: '',
-              startDate: '',
-              endDate: '',
-              location: '',
-              maxPeople: 10,
-              pricePerPerson: 0,
-              difficulty: 'intermediária',
-            });
-          }}
-          className="btn btn-primary flex items-center gap-2"
-        >
-          <Plus size={20} />
-          Nova Expedição
-        </button>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-4xl font-bold">Expedições</h1>
+          <p className="text-gray-500 text-sm mt-1">
+            Projetos com faturamento, custos, lucro e clientes
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={fetchExpeditions} className="btn btn-secondary flex items-center gap-2">
+            <RefreshCw size={18} /> Atualizar
+          </button>
+          <button onClick={() => setShowForm(true)} className="btn btn-primary flex items-center gap-2">
+            <Plus size={18} /> Nova Expedição
+          </button>
+        </div>
       </div>
 
-      {/* Form Modal */}
-      {showForm && (
-        <div className="card mb-6 bg-blue-50 border-blue-200">
-          <h2 className="text-2xl font-bold mb-4">{editingId ? 'Editar Expedição' : 'Nova Expedição'}</h2>
-          <div className="grid md:grid-cols-2 gap-4">
-            <input
-              type="text"
-              placeholder="Nome da Expedição"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="input md:col-span-2"
-            />
-            <textarea
-              placeholder="Descrição"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="input md:col-span-2 h-20"
-            />
-            <input
-              type="date"
-              placeholder="Data Início"
-              value={formData.startDate}
-              onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-              className="input"
-            />
-            <input
-              type="date"
-              placeholder="Data Fim"
-              value={formData.endDate}
-              onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-              className="input"
-            />
-            <input
-              type="text"
-              placeholder="Local"
-              value={formData.location}
-              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              className="input"
-            />
-            <input
-              type="number"
-              placeholder="Máximo de Pessoas"
-              value={formData.maxPeople}
-              onChange={(e) => setFormData({ ...formData, maxPeople: parseInt(e.target.value) })}
-              className="input"
-            />
-            <input
-              type="number"
-              placeholder="Preço por Pessoa (R$)"
-              value={formData.pricePerPerson}
-              onChange={(e) => setFormData({ ...formData, pricePerPerson: parseFloat(e.target.value) })}
-              className="input"
-            />
-            <select
-              value={formData.difficulty}
-              onChange={(e) => setFormData({ ...formData, difficulty: e.target.value as 'fácil' | 'intermediária' | 'difícil' })}
-              className="input"
-            >
-              <option value="fácil">Fácil</option>
-              <option value="intermediária">Intermediária</option>
-              <option value="difícil">Difícil</option>
-            </select>
-          </div>
-          <div className="flex gap-2 mt-4">
-            <button onClick={handleAddExpedition} className="btn btn-primary">
-              {editingId ? 'Atualizar' : 'Criar'} Expedição
-            </button>
-            <button
-              onClick={() => {
-                setShowForm(false);
-                setEditingId(null);
-              }}
-              className="btn btn-secondary"
-            >
-              Cancelar
-            </button>
-          </div>
+      {loading ? (
+        <div className="text-center py-20 text-gray-500">
+          <RefreshCw className="w-8 h-8 mx-auto mb-3 animate-spin" />
+          Carregando...
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {expeditions.map((exp) => {
+            const f = exp.finance;
+            return (
+              <Link
+                key={exp.id}
+                href={`/dashboard/expeditions/${exp.id}`}
+                className="card hover:shadow-lg transition-shadow block"
+              >
+                <div className="flex justify-between items-start mb-3">
+                  <h3 className="text-lg font-bold leading-tight">{exp.routeName}</h3>
+                  <span
+                    className={`text-[10px] font-medium px-2 py-1 rounded-full whitespace-nowrap ${
+                      statusColors[exp.status] || statusColors.planejamento
+                    }`}
+                  >
+                    {statusLabels[exp.status] || exp.status}
+                  </span>
+                </div>
+
+                <div className="space-y-1 text-sm text-gray-500 mb-4">
+                  {exp.location && (
+                    <p className="flex items-center gap-1">
+                      <MapPin size={14} /> {exp.location}
+                    </p>
+                  )}
+                  <p className="flex items-center gap-1">
+                    <Users size={14} /> {f.totalParticipants}/{exp.slots} vagas
+                  </p>
+                  {exp.startDate && (
+                    <p className="text-xs">
+                      {formatDate(exp.startDate)} – {formatDate(exp.endDate)}
+                    </p>
+                  )}
+                </div>
+
+                {/* Barra de progressão de pagamento */}
+                <div className="mb-3">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-gray-500">Pago</span>
+                    <span className="font-semibold text-emerald-600">
+                      {f.paymentProgress.toFixed(0)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-emerald-500 h-full transition-all"
+                      style={{ width: `${Math.min(f.paymentProgress, 100)}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-100 text-sm">
+                  <div>
+                    <p className="text-[10px] uppercase text-gray-400">Faturamento</p>
+                    <p className="font-bold text-gray-800">
+                      {formatBRL(f.contractedRevenue || f.revenueGoal)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-gray-400">Lucro ({f.profitMargin.toFixed(0)}%)</p>
+                    <p className={`font-bold ${f.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {formatBRL(f.profit)}
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+
+          {expeditions.length === 0 && (
+            <div className="col-span-full text-center py-16 text-gray-400">
+              <MapPin size={48} className="mx-auto mb-4 opacity-40" />
+              <p>Nenhuma expedição. Crie a primeira!</p>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Expeditions Grid */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {expeditions.map((expedition) => (
-          <div key={expedition.id} className="card hover:shadow-lg transition-shadow">
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="text-xl font-bold">{expedition.name}</h3>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleEditExpedition(expedition)}
-                  className="p-2 hover:bg-blue-100 rounded transition-colors"
-                >
-                  <Edit2 size={16} className="text-blue-600" />
-                </button>
-                <button
-                  onClick={() => handleDeleteExpedition(expedition.id)}
-                  className="p-2 hover:bg-red-100 rounded transition-colors"
-                >
-                  <Trash2 size={16} className="text-red-600" />
-                </button>
-              </div>
+      {/* Modal criar */}
+      {showForm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h2 className="text-xl font-bold">Nova Expedição (Projeto)</h2>
+              <button onClick={() => setShowForm(false)} className="p-1 hover:bg-gray-100 rounded">
+                <X size={20} />
+              </button>
             </div>
-
-            {expedition.description && (
-              <p className="text-gray-600 text-sm mb-4">{expedition.description}</p>
-            )}
-
-            <div className="space-y-2 mb-4 text-sm">
-              <div className="flex items-center gap-2">
-                <MapPin size={16} className="text-gray-400" />
-                <span>{expedition.location}</span>
+            <div className="p-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <input
+                  className="input md:col-span-2"
+                  placeholder="Nome do roteiro *"
+                  value={form.routeName}
+                  onChange={(e) => setForm({ ...form, routeName: e.target.value })}
+                />
+                <textarea
+                  className="input md:col-span-2 h-16"
+                  placeholder="Descrição"
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                />
+                <input
+                  className="input"
+                  placeholder="Local"
+                  value={form.location}
+                  onChange={(e) => setForm({ ...form, location: e.target.value })}
+                />
+                <select
+                  className="input"
+                  value={form.status}
+                  onChange={(e) => setForm({ ...form, status: e.target.value })}
+                >
+                  <option value="planejamento">Planejamento</option>
+                  <option value="aberta">Aberta</option>
+                  <option value="em_andamento">Em Andamento</option>
+                  <option value="finalizada">Finalizada</option>
+                </select>
+                <div>
+                  <label className="text-xs text-gray-500">Data início</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={form.startDate}
+                    onChange={(e) => setForm({ ...form, startDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Data fim</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={form.endDate}
+                    onChange={(e) => setForm({ ...form, endDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Vagas</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={form.slots}
+                    onChange={(e) => setForm({ ...form, slots: Number(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Meta de faturamento (R$)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={form.revenueGoal}
+                    onChange={(e) => setForm({ ...form, revenueGoal: Number(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Preço por pessoa (R$)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={form.pricePerPerson}
+                    onChange={(e) => setForm({ ...form, pricePerPerson: Number(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Preço por criança (R$)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={form.pricePerChild}
+                    onChange={(e) => setForm({ ...form, pricePerChild: Number(e.target.value) })}
+                  />
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Users size={16} className="text-gray-400" />
-                <span>{expedition.maxPeople} pessoas no máximo</span>
-              </div>
-              <div className="text-gray-600">
-                {format(new Date(expedition.startDate), 'dd MMM yyyy', { locale: ptBR })} -{' '}
-                {format(new Date(expedition.endDate), 'dd MMM yyyy', { locale: ptBR })}
-              </div>
-            </div>
 
-            <div className="flex justify-between items-center pt-4 border-t border-gray-200">
-              <span className={`px-3 py-1 rounded-full text-xs font-medium ${difficultyColors[expedition.difficulty]}`}>
-                {expedition.difficulty}
-              </span>
-              <span className="text-lg font-bold text-blue-600">R$ {expedition.pricePerPerson.toLocaleString('pt-BR')}</span>
+              {/* Prévia */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4 flex items-center gap-2 text-sm">
+                <TrendingUp size={16} className="text-blue-600" />
+                <span>
+                  Faturamento projetado:{' '}
+                  <strong>{formatBRL(projectedRevenue)}</strong>{' '}
+                  ({form.slots} vagas × {formatBRL(form.pricePerPerson)})
+                </span>
+              </div>
+
+              <div className="flex gap-2 mt-4">
+                <button onClick={create} className="btn btn-primary">
+                  Criar Expedição
+                </button>
+                <button onClick={() => setShowForm(false)} className="btn btn-secondary">
+                  Cancelar
+                </button>
+              </div>
             </div>
           </div>
-        ))}
-      </div>
-
-      {expeditions.length === 0 && (
-        <div className="text-center py-16 text-gray-500">
-          <MapPin size={48} className="mx-auto mb-4 opacity-50" />
-          <p>Nenhuma expedição cadastrada</p>
         </div>
       )}
     </div>
