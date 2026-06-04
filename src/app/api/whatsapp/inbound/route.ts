@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { processInbound } from '@/lib/agent/inbound';
+import { resolve } from '@/lib/integrationsStore';
 
 /**
  * Endpoint canônico que o conector de WhatsApp (Baileys / Meta Cloud API) chama
@@ -8,10 +9,9 @@ import { processInbound } from '@/lib/agent/inbound';
  * Body: { "phone": "55...@s.whatsapp.net", "text": "...", "contactName": "..." }
  * Resposta: { "reply": "...", "mode": "bot" }  // reply=null => não enviar nada
  */
-const TOKEN = process.env.WHATSAPP_CONNECTOR_TOKEN || '';
-
 export async function POST(request: NextRequest) {
   try {
+    const TOKEN = resolve().whatsappConnectorToken;
     if (TOKEN) {
       const t = request.headers.get('x-connector-token');
       if (t !== TOKEN) {

@@ -9,10 +9,7 @@ import { buildPixPayload } from './pix';
 import { expeditionsStore } from '@/lib/expeditionsStore';
 import { clientsStore } from '@/lib/clientsStore';
 import { upsertLeadFromContact } from '@/lib/leadsStore';
-
-const PIX_KEY = process.env.PIX_KEY || '';
-const PIX_NAME = process.env.PIX_MERCHANT_NAME || '4x4 Mundo Afora';
-const PIX_CITY = process.env.PIX_MERCHANT_CITY || 'SAO PAULO';
+import { resolve } from '@/lib/integrationsStore';
 
 export interface ChargeInput {
   clientName: string;
@@ -73,11 +70,12 @@ export async function createCharge(input: ChargeInput): Promise<ChargeResult> {
   }
 
   // Fallback grátis: PIX copia-e-cola com a sua chave (confirmação manual)
-  if (PIX_KEY) {
+  const r = resolve();
+  if (r.pixKey) {
     const payload = buildPixPayload({
-      key: PIX_KEY,
-      merchantName: PIX_NAME,
-      merchantCity: PIX_CITY,
+      key: r.pixKey,
+      merchantName: r.pixMerchantName,
+      merchantCity: r.pixMerchantCity,
       amount: input.value,
       description: input.description,
     });

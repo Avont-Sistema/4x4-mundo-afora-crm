@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { recordConfirmedPayment } from '@/lib/payments';
+import { resolve } from '@/lib/integrationsStore';
 
 // Webhook do Asaas. Configure em: Asaas → Integrações → Webhooks
 // URL: https://<seu-dominio>/api/payments/asaas/webhook
-// Opcional: defina ASAAS_WEBHOOK_TOKEN e o header "asaas-access-token".
-const TOKEN = process.env.ASAAS_WEBHOOK_TOKEN || '';
-
+// Opcional: token em Configurações → Integrações, header "asaas-access-token".
 export async function POST(request: NextRequest) {
   try {
+    const TOKEN = resolve().asaasWebhookToken;
     if (TOKEN) {
       const t = request.headers.get('asaas-access-token');
       if (t !== TOKEN) {

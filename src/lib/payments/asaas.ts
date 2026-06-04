@@ -1,21 +1,24 @@
 // Cliente da API Asaas (PIX taxa fixa baixa, cartão à vista/parcelado, boleto).
 // Docs: https://docs.asaas.com
+import { resolve } from '@/lib/integrationsStore';
 
-const API_KEY = process.env.ASAAS_API_KEY || '';
-const ENV = process.env.ASAAS_ENV || 'sandbox';
-const BASE =
-  ENV === 'production'
+function apiKey() {
+  return resolve().asaasApiKey;
+}
+function baseUrl() {
+  return resolve().asaasEnv === 'production'
     ? 'https://api.asaas.com/v3'
     : 'https://api-sandbox.asaas.com/v3';
+}
 
-export const isAsaasEnabled = () => Boolean(API_KEY);
+export const isAsaasEnabled = () => Boolean(apiKey());
 
 async function asaas(path: string, init?: RequestInit) {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${baseUrl()}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      access_token: API_KEY,
+      access_token: apiKey(),
       ...(init?.headers || {}),
     },
   });

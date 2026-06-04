@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Menu, X, LogOut, BarChart3, Users, MapPin, DollarSign, MessageCircle, Settings, Mail } from 'lucide-react';
+import { Menu, X, LogOut, BarChart3, Users, MapPin, DollarSign, MessageCircle, Settings, Mail, Plug } from 'lucide-react';
 
 export default function DashboardLayout({
   children,
@@ -21,6 +21,7 @@ export default function DashboardLayout({
     { href: '/dashboard/financial', label: 'Financeiro', icon: DollarSign },
     { href: '/dashboard/campaigns', label: 'Campanhas', icon: Mail },
     { href: '/dashboard/whatsapp', label: 'WhatsApp IA', icon: MessageCircle },
+    { href: '/dashboard/settings', label: 'Configurações', icon: Plug },
   ];
 
   return (

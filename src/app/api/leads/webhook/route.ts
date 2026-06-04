@@ -4,6 +4,7 @@ import {
   type LeadSource,
   type CreateLeadInput,
 } from '@/lib/leadsStore';
+import { resolve } from '@/lib/integrationsStore';
 
 /**
  * Webhook unificado de captação de leads.
@@ -25,9 +26,9 @@ import {
  *    { "user_column_data": [ { "column_id": "FULL_NAME", "string_value": "..." }, ... ] }
  */
 
-// Token simples de verificação. Configure LEADS_WEBHOOK_TOKEN no .env e
-// envie o mesmo valor no header "x-webhook-token" a partir da plataforma de anúncios.
-const WEBHOOK_TOKEN = process.env.LEADS_WEBHOOK_TOKEN || '';
+// Token de verificação (configurável em Configurações → Integrações).
+// Envie o mesmo valor no header "x-webhook-token" a partir da plataforma de anúncios.
+const token = () => resolve().leadsWebhookToken;
 
 function parseMetaLeadAds(body: any): Partial<CreateLeadInput> {
   const out: Partial<CreateLeadInput> = {};
@@ -65,9 +66,10 @@ export async function POST(request: NextRequest) {
     const source = (searchParams.get('source') as LeadSource) || 'other';
 
     // Verificação de token (opcional — só valida se o token estiver configurado)
+    const WEBHOOK_TOKEN = token();
     if (WEBHOOK_TOKEN) {
-      const token = request.headers.get('x-webhook-token');
-      if (token !== WEBHOOK_TOKEN) {
+      const headerToken = request.headers.get('x-webhook-token');
+      if (headerToken !== WEBHOOK_TOKEN) {
         return NextResponse.json({ error: 'Token inválido' }, { status: 401 });
       }
     }
@@ -130,6 +132,7 @@ export async function GET(request: NextRequest) {
   const challenge = searchParams.get('hub.challenge');
   const verifyToken = searchParams.get('hub.verify_token');
 
+  const WEBHOOK_TOKEN = token();
   if (challenge && (!WEBHOOK_TOKEN || verifyToken === WEBHOOK_TOKEN)) {
     return new NextResponse(challenge, { status: 200 });
   }

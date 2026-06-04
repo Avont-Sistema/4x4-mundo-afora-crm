@@ -2,22 +2,29 @@ import Anthropic from '@anthropic-ai/sdk';
 import { TOOLS, executeTool } from './tools';
 import { masterPrompt, negocio } from './negocio';
 import { expeditionsStore, buildExpeditionDetail } from '@/lib/expeditionsStore';
+import { resolve } from '@/lib/integrationsStore';
 
-const apiKey = process.env.ANTHROPIC_API_KEY || '';
-const client = apiKey ? new Anthropic({ apiKey }) : null;
-const MODEL = process.env.AGENT_MODEL || 'claude-haiku-4-5';
 const MAX_HISTORY = 20;
 
-export const aiEnabled = () => Boolean(client);
+function getClient(): Anthropic | null {
+  const key = resolve().anthropicApiKey;
+  return key ? new Anthropic({ apiKey: key }) : null;
+}
+function getModel(): string {
+  return resolve().agentModel || 'claude-haiku-4-5';
+}
+
+export const aiEnabled = () => Boolean(resolve().anthropicApiKey);
 
 type Msg = { role: 'user' | 'assistant'; content: any };
 
 // ── Triagem ──────────────────────────────────────────────────────────────
 export async function classify(message: string): Promise<string> {
+  const client = getClient();
   if (!client) return 'INFO';
   try {
     const res = await client.messages.create({
-      model: MODEL,
+      model: getModel(),
       max_tokens: 10,
       system: `Classifique a mensagem do cliente de uma agência de expedições offroad.
 Responda SOMENTE com uma palavra:
@@ -39,6 +46,7 @@ export async function runAgent(
   history: { role: 'user' | 'assistant'; content: string }[],
   operatorNotes?: string
 ): Promise<{ reply: string; usedTools: string[] }> {
+  const client = getClient();
   if (!client) {
     return { reply: fallbackReply(history[history.length - 1]?.content || ''), usedTools: [] };
   }
@@ -46,40 +54,49 @@ export async function runAgent(
   const system = masterPrompt(operatorNotes);
   const messages: Msg[] = history.slice(-MAX_HISTORY).map((m) => ({ ...m }));
   const usedTools: string[] = [];
+  const model = getModel();
 
-  for (let i = 0; i < 6; i++) {
-    const res: any = await client.messages.create({
-      model: MODEL,
-      max_tokens: 1024,
-      system,
-      tools: TOOLS,
-      messages,
-    } as any);
+  try {
+    for (let i = 0; i < 6; i++) {
+      const res: any = await client.messages.create({
+        model,
+        max_tokens: 1024,
+        system,
+        tools: TOOLS,
+        messages,
+      } as any);
 
-    if (res.stop_reason === 'tool_use') {
-      messages.push({ role: 'assistant', content: res.content });
-      const toolResults: any[] = [];
-      for (const block of res.content as any[]) {
-        if (block.type !== 'tool_use') continue;
-        usedTools.push(block.name);
-        const result = await executeTool(block.name, block.input, phone);
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: block.id,
-          content: JSON.stringify(result),
-        });
+      if (res.stop_reason === 'tool_use') {
+        messages.push({ role: 'assistant', content: res.content });
+        const toolResults: any[] = [];
+        for (const block of res.content as any[]) {
+          if (block.type !== 'tool_use') continue;
+          usedTools.push(block.name);
+          const result = await executeTool(block.name, block.input, phone);
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: block.id,
+            content: JSON.stringify(result),
+          });
+        }
+        messages.push({ role: 'user', content: toolResults });
+        continue;
       }
-      messages.push({ role: 'user', content: toolResults });
-      continue;
+
+      // resposta final
+      const text =
+        (res.content.find((b: any) => b.type === 'text') as any)?.text || '';
+      return { reply: text || 'Pode repetir, por favor?', usedTools };
     }
-
-    // resposta final
-    const text =
-      (res.content.find((b: any) => b.type === 'text') as any)?.text || '';
-    return { reply: text || 'Pode repetir, por favor?', usedTools };
+    return { reply: 'Desculpe, tive um problema. Pode repetir?', usedTools };
+  } catch (err: any) {
+    // Chave inválida / API fora do ar / etc → não derruba o atendimento
+    console.error('[agent] erro na IA, usando fallback:', err?.message);
+    return {
+      reply: fallbackReply(history[history.length - 1]?.content || ''),
+      usedTools,
+    };
   }
-
-  return { reply: 'Desculpe, tive um problema. Pode repetir?', usedTools };
 }
 
 // ── Fallback sem IA (mantém o sistema funcional sem ANTHROPIC_API_KEY) ──────
