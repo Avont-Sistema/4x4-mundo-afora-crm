@@ -7,9 +7,7 @@ import {
 import { clientsStore } from '@/lib/clientsStore';
 import { upsertLeadFromContact, findLeadByPhone } from '@/lib/leadsStore';
 import { setMode } from '@/lib/conversationsStore';
-
-const APP_URL =
-  process.env.APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3030';
+import { createCharge } from '@/lib/payments';
 
 // ── Definições enviadas ao Claude ──────────────────────────────────────────
 export const TOOLS = [
@@ -52,7 +50,7 @@ export const TOOLS = [
   {
     name: 'gerar_link_pagamento',
     description:
-      'Gera um link de pagamento seguro para o cliente fechar a expedição. Informe a expedição e a quantidade de pessoas.',
+      'Gera o pagamento da expedição. Suporta PIX, cartão e parcelamento (quando informado parcelas). Informe a expedição, quantidade de pessoas e, para cartão/parcelado, peça o CPF do cliente.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -60,6 +58,8 @@ export const TOOLS = [
         adultos: { type: 'number', description: 'Quantidade de adultos' },
         criancas: { type: 'number', description: 'Quantidade de crianças' },
         nome: { type: 'string', description: 'Nome do cliente' },
+        cpf: { type: 'string', description: 'CPF do cliente (necessário para cartão/parcelado via Asaas)' },
+        parcelas: { type: 'number', description: 'Número de parcelas (1 = à vista)' },
       },
       required: ['expedicao'],
     },
@@ -222,12 +222,30 @@ export async function executeTool(
       const adultos = Number(input.adultos) || 1;
       const criancas = Number(input.criancas) || 0;
       const valor = adultos * exp.pricePerPerson + criancas * exp.pricePerChild;
-      const url = `${APP_URL}/checkout?expedition=${encodeURIComponent(
-        exp.routeName
-      )}&amount=${valor}&adults=${adultos}&children=${criancas}&phone=${encodeURIComponent(
-        phone
-      )}`;
-      return { sucesso: true, valor_total: valor, link: url };
+      const client = clientByPhone(phone);
+      const charge = await createCharge({
+        clientName: input.nome || client?.name || 'Cliente',
+        phone,
+        email: client?.email,
+        cpf: input.cpf || client?.cpf,
+        value: valor,
+        installments: input.parcelas ? Number(input.parcelas) : undefined,
+        description: `Expedição ${exp.routeName}`,
+        expeditionId: exp.id,
+      });
+      if (charge.provider === 'asaas') {
+        return { sucesso: true, valor_total: valor, link: charge.url, forma: 'Asaas (PIX, cartão ou parcelado)' };
+      }
+      if (charge.provider === 'pix') {
+        return {
+          sucesso: true,
+          valor_total: valor,
+          pix_copia_e_cola: charge.pixPayload,
+          forma: 'PIX',
+          aviso: charge.message,
+        };
+      }
+      return { sucesso: false, mensagem: charge.message };
     }
 
     case 'cadastrar_cliente': {
