@@ -1,0 +1,326 @@
+import { negocio } from './negocio';
+import {
+  expeditionsStore,
+  buildExpeditionDetail,
+  type Expedition,
+} from '@/lib/expeditionsStore';
+import { clientsStore } from '@/lib/clientsStore';
+import { upsertLeadFromContact, findLeadByPhone } from '@/lib/leadsStore';
+import { setMode } from '@/lib/conversationsStore';
+
+const APP_URL =
+  process.env.APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3030';
+
+// ── Definições enviadas ao Claude ──────────────────────────────────────────
+export const TOOLS = [
+  {
+    name: 'consultar_expedicoes',
+    description:
+      'Lista as expedições abertas com datas, vagas disponíveis e preços reais. Use sempre que o cliente perguntar sobre opções, próximas saídas, valores ou disponibilidade.',
+    input_schema: { type: 'object' as const, properties: {} },
+  },
+  {
+    name: 'consultar_expedicao',
+    description:
+      'Detalha uma expedição específica pelo nome (ou parte dele): datas, vagas, preço por adulto e por criança.',
+    input_schema: {
+      type: 'object' as const,
+      properties: { nome: { type: 'string', description: 'Nome ou parte do nome da expedição' } },
+      required: ['nome'],
+    },
+  },
+  {
+    name: 'consultar_cliente',
+    description:
+      'Busca se o telefone já é um lead ou cliente cadastrado (nome, estágio, expedições).',
+    input_schema: { type: 'object' as const, properties: {} },
+  },
+  {
+    name: 'registrar_lead',
+    description:
+      'Registra/atualiza o interesse do cliente como lead no CRM. Use assim que souber o nome e o interesse.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        nome: { type: 'string', description: 'Nome do cliente' },
+        interesse: { type: 'string', description: 'Expedição ou assunto de interesse' },
+        observacoes: { type: 'string', description: 'Outras informações relevantes' },
+      },
+      required: ['nome'],
+    },
+  },
+  {
+    name: 'gerar_link_pagamento',
+    description:
+      'Gera um link de pagamento seguro para o cliente fechar a expedição. Informe a expedição e a quantidade de pessoas.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        expedicao: { type: 'string', description: 'Nome da expedição' },
+        adultos: { type: 'number', description: 'Quantidade de adultos' },
+        criancas: { type: 'number', description: 'Quantidade de crianças' },
+        nome: { type: 'string', description: 'Nome do cliente' },
+      },
+      required: ['expedicao'],
+    },
+  },
+  {
+    name: 'cadastrar_cliente',
+    description:
+      'Cadastra o cliente no CRM (use após o cliente confirmar interesse de fechar ou efetuar pagamento).',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        nome: { type: 'string', description: 'Nome completo' },
+        email: { type: 'string', description: 'Email (se tiver)' },
+      },
+      required: ['nome'],
+    },
+  },
+  {
+    name: 'matricular_cliente',
+    description:
+      'Matricula o cliente em uma expedição. Use após cadastrar o cliente e ele confirmar a ida.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        expedicao: { type: 'string', description: 'Nome da expedição' },
+        adultos: { type: 'number' },
+        criancas: { type: 'number' },
+      },
+      required: ['expedicao'],
+    },
+  },
+  {
+    name: 'registrar_pagamento',
+    description:
+      'Lança um pagamento do cliente numa expedição que ele já está matriculado.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        expedicao: { type: 'string' },
+        valor: { type: 'number', description: 'Valor pago em reais' },
+        metodo: { type: 'string', description: 'pix, cartao, link...' },
+      },
+      required: ['expedicao', 'valor'],
+    },
+  },
+  {
+    name: 'buscar_faq',
+    description: 'Responde dúvidas frequentes (carro 4x4, criança, o que está incluso, pagamento).',
+    input_schema: {
+      type: 'object' as const,
+      properties: { pergunta: { type: 'string' } },
+      required: ['pergunta'],
+    },
+  },
+  {
+    name: 'escalar_humano',
+    description:
+      'Transfere a conversa para um atendente humano. Use em reclamações, casos delicados ou quando não souber responder.',
+    input_schema: {
+      type: 'object' as const,
+      properties: { motivo: { type: 'string' } },
+    },
+  },
+];
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function findExpeditionByName(nome: string): Expedition | undefined {
+  const q = (nome || '').toLowerCase();
+  const all = expeditionsStore.all();
+  return (
+    all.find((e) => e.routeName.toLowerCase() === q) ||
+    all.find((e) => e.routeName.toLowerCase().includes(q)) ||
+    all.find((e) => q.includes(e.routeName.toLowerCase().split(' ')[0]))
+  );
+}
+
+function clientByPhone(phone: string) {
+  const n = (phone || '').replace(/\D/g, '');
+  return clientsStore
+    .all()
+    .find(
+      (c) =>
+        (c.phone || '').replace(/\D/g, '') === n ||
+        (c.whatsapp || '').replace(/\D/g, '') === n
+    );
+}
+
+// ── Execução ────────────────────────────────────────────────────────────────
+export async function executeTool(
+  name: string,
+  input: any,
+  phone: string
+): Promise<any> {
+  switch (name) {
+    case 'consultar_expedicoes': {
+      const open = expeditionsStore
+        .all()
+        .filter((e) => e.status === 'aberta' || e.status === 'em_andamento')
+        .map((e) => {
+          const d = buildExpeditionDetail(e);
+          return {
+            nome: e.routeName,
+            local: e.location,
+            inicio: e.startDate,
+            fim: e.endDate,
+            vagas_disponiveis: d.finance.slotsAvailable,
+            preco_adulto: e.pricePerPerson,
+            preco_crianca: e.pricePerChild,
+          };
+        });
+      return { total: open.length, expedicoes: open };
+    }
+
+    case 'consultar_expedicao': {
+      const exp = findExpeditionByName(input.nome);
+      if (!exp) return { encontrada: false, mensagem: 'Expedição não encontrada.' };
+      const d = buildExpeditionDetail(exp);
+      return {
+        encontrada: true,
+        nome: exp.routeName,
+        descricao: exp.description,
+        local: exp.location,
+        inicio: exp.startDate,
+        fim: exp.endDate,
+        vagas_disponiveis: d.finance.slotsAvailable,
+        preco_adulto: exp.pricePerPerson,
+        preco_crianca: exp.pricePerChild,
+      };
+    }
+
+    case 'consultar_cliente': {
+      const lead = findLeadByPhone(phone);
+      const client = clientByPhone(phone);
+      return {
+        e_lead: !!lead,
+        e_cliente: !!client,
+        nome: client?.name || lead?.name || null,
+        estagio_lead: lead?.stage || null,
+      };
+    }
+
+    case 'registrar_lead': {
+      const { lead, created } = upsertLeadFromContact({
+        name: input.nome,
+        phone,
+        whatsapp: phone,
+        source: 'whatsapp',
+        stage: 'novo',
+        handledBy: 'ia',
+        interest: input.interesse,
+        notes: input.observacoes,
+        lastMessage: input.observacoes,
+      });
+      return { sucesso: true, novo: created, lead_id: lead.id };
+    }
+
+    case 'gerar_link_pagamento': {
+      const exp = findExpeditionByName(input.expedicao);
+      if (!exp) return { sucesso: false, mensagem: 'Expedição não encontrada.' };
+      const adultos = Number(input.adultos) || 1;
+      const criancas = Number(input.criancas) || 0;
+      const valor = adultos * exp.pricePerPerson + criancas * exp.pricePerChild;
+      const url = `${APP_URL}/checkout?expedition=${encodeURIComponent(
+        exp.routeName
+      )}&amount=${valor}&adults=${adultos}&children=${criancas}&phone=${encodeURIComponent(
+        phone
+      )}`;
+      return { sucesso: true, valor_total: valor, link: url };
+    }
+
+    case 'cadastrar_cliente': {
+      let client = clientByPhone(phone);
+      let novo = false;
+      if (!client) {
+        client = clientsStore.create({
+          name: input.nome,
+          email: input.email,
+          phone,
+          whatsapp: phone,
+          family: [],
+          origin: 'whatsapp_bot',
+          notes: 'Cadastrado pelo agente do WhatsApp',
+        });
+        novo = true;
+      }
+      // converte o lead
+      const lead = findLeadByPhone(phone);
+      if (lead) upsertLeadFromContact({ name: client.name, phone, source: 'whatsapp', stage: 'finalizado' });
+      return { sucesso: true, novo, cliente_id: client.id };
+    }
+
+    case 'matricular_cliente': {
+      const exp = findExpeditionByName(input.expedicao);
+      if (!exp) return { sucesso: false, mensagem: 'Expedição não encontrada.' };
+      let client = clientByPhone(phone);
+      if (!client) {
+        client = clientsStore.create({
+          name: input.nome || phone,
+          phone,
+          whatsapp: phone,
+          family: [],
+          origin: 'whatsapp_bot',
+        });
+      }
+      const exists = exp.enrollments.find(
+        (e) => e.clientId === client!.id && e.status !== 'cancelado'
+      );
+      if (exists) return { sucesso: true, ja_matriculado: true, matricula_id: exists.id };
+      const adultos = Number(input.adultos) || 1;
+      const criancas = Number(input.criancas) || 0;
+      const enr = {
+        id: crypto.randomUUID(),
+        clientId: client.id,
+        clientName: client.name,
+        adults: adultos,
+        children: criancas,
+        agreedPrice: adultos * exp.pricePerPerson + criancas * exp.pricePerChild,
+        payments: [],
+        observations: 'Matriculado pelo agente do WhatsApp',
+        status: 'reservado' as const,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      exp.enrollments.push(enr);
+      expeditionsStore.touch(exp.id);
+      return { sucesso: true, matricula_id: enr.id, valor: enr.agreedPrice };
+    }
+
+    case 'registrar_pagamento': {
+      const exp = findExpeditionByName(input.expedicao);
+      if (!exp) return { sucesso: false, mensagem: 'Expedição não encontrada.' };
+      const client = clientByPhone(phone);
+      const enr = exp.enrollments.find(
+        (e) => client && e.clientId === client.id && e.status !== 'cancelado'
+      );
+      if (!enr) return { sucesso: false, mensagem: 'Cliente não está matriculado nessa expedição.' };
+      enr.payments.push({
+        id: crypto.randomUUID(),
+        date: new Date().toISOString().split('T')[0],
+        amount: Number(input.valor),
+        method: input.metodo || 'link',
+        description: 'Pagamento via WhatsApp',
+      });
+      enr.status = 'confirmado';
+      enr.updatedAt = new Date().toISOString();
+      expeditionsStore.touch(exp.id);
+      return { sucesso: true };
+    }
+
+    case 'buscar_faq': {
+      const q = (input.pergunta || '').toLowerCase();
+      const found = negocio.faq.find((f) => q.includes(f.pergunta));
+      return found || { mensagem: 'Não tenho essa resposta exata, posso verificar com a equipe.' };
+    }
+
+    case 'escalar_humano': {
+      setMode(phone, 'human');
+      return { sucesso: true, mensagem: 'Conversa transferida para atendimento humano.' };
+    }
+
+    default:
+      return { erro: `Ferramenta ${name} não encontrada.` };
+  }
+}
