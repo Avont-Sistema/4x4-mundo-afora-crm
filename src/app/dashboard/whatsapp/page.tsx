@@ -1,7 +1,8 @@
 'use client';
 
-import { MessageCircle, Send } from 'lucide-react';
+import { MessageCircle, Send, Loader } from 'lucide-react';
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 
 interface Message {
   id: string;
@@ -10,36 +11,57 @@ interface Message {
   timestamp: string;
 }
 
-const mockMessages: Message[] = [
-  { id: '1', sender: 'user', message: 'Olá, qual a próxima expedição disponível?', timestamp: '10:30' },
-  { id: '2', sender: 'bot', message: 'Olá! Temos duas expedições disponíveis:\n1. Lençóis Maranhenses (15-20 de julho) - R$ 2.500\n2. Vale da Lua (1-5 de agosto) - R$ 1.800\n\nQual interesse em conhecer mais?', timestamp: '10:31' },
+const initialMessages: Message[] = [
+  { id: '1', sender: 'bot', message: 'Olá! 👋 Bem-vindo à 4x4 Mundo Afora! Como posso ajudá-lo hoje?', timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) },
 ];
 
 export default function WhatsAppPage() {
-  const [messages, setMessages] = useState<Message[]>(mockMessages);
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [inputValue, setInputValue] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSendMessage = () => {
-    if (inputValue.trim()) {
-      const newMessage: Message = {
-        id: Date.now().toString(),
-        sender: 'user',
-        message: inputValue,
-        timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages([...messages, newMessage]);
-      setInputValue('');
+  const handleSendMessage = async () => {
+    if (!inputValue.trim()) return;
 
-      // Simular resposta do bot após 1 segundo
-      setTimeout(() => {
-        const botResponse: Message = {
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      sender: 'user',
+      message: inputValue,
+      timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInputValue('');
+    setLoading(true);
+
+    try {
+      const response = await fetch('/api/whatsapp/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: inputValue,
+          leadId: 'current-lead',
+          clientId: null,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        const botMessage: Message = {
           id: (Date.now() + 1).toString(),
           sender: 'bot',
-          message: 'Entendi sua pergunta. Como posso ajudar melhor?',
+          message: data.message,
           timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         };
-        setMessages((prev) => [...prev, botResponse]);
-      }, 1000);
+        setMessages((prev) => [...prev, botMessage]);
+      } else {
+        toast.error(data.error || 'Erro ao enviar mensagem');
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao conectar com servidor');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -57,7 +79,7 @@ export default function WhatsAppPage() {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto mb-4 space-y-4">
+          <div className="flex-1 overflow-y-auto mb-4 space-y-4 px-2">
             {messages.map((msg) => (
               <div
                 key={msg.id}
@@ -77,6 +99,14 @@ export default function WhatsAppPage() {
                 </div>
               </div>
             ))}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="bg-gray-200 text-gray-900 px-4 py-2 rounded-lg rounded-bl-none flex items-center gap-2">
+                  <Loader size={16} className="animate-spin" />
+                  <span className="text-sm">Digitando...</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Input */}
@@ -86,12 +116,14 @@ export default function WhatsAppPage() {
               placeholder="Digite sua mensagem..."
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-              className="input flex-1"
+              onKeyPress={(e) => e.key === 'Enter' && !loading && handleSendMessage()}
+              disabled={loading}
+              className="input flex-1 disabled:opacity-50"
             />
             <button
               onClick={handleSendMessage}
-              className="btn btn-primary"
+              disabled={loading}
+              className="btn btn-primary disabled:opacity-50"
             >
               <Send size={20} />
             </button>
