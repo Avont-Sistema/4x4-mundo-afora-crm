@@ -81,7 +81,17 @@ export default function ClientsPage() {
   };
 
   const handleEditClient = (client: Client) => {
-    setFormData(client);
+    setFormData({
+      name: client.name,
+      email: client.email || '',
+      phone: client.phone || '',
+      whatsapp: client.whatsapp || '',
+      cpfCnpj: client.cpfCnpj || '',
+      address: client.address || '',
+      city: client.city || '',
+      state: client.state || '',
+      birthDate: client.birthDate || '',
+    });
     setEditingId(client.id);
     setShowForm(true);
   };

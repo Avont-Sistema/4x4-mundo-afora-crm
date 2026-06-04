@@ -60,7 +60,7 @@ export default function ExpeditionsPage() {
     location: '',
     maxPeople: 10,
     pricePerPerson: 0,
-    difficulty: 'intermediária' as const,
+    difficulty: 'intermediária' as 'fácil' | 'intermediária' | 'difícil',
   });
 
   const handleAddExpedition = () => {
@@ -88,7 +88,16 @@ export default function ExpeditionsPage() {
   };
 
   const handleEditExpedition = (expedition: Expedition) => {
-    setFormData(expedition);
+    setFormData({
+      name: expedition.name,
+      description: expedition.description || '',
+      startDate: expedition.startDate,
+      endDate: expedition.endDate,
+      location: expedition.location,
+      maxPeople: expedition.maxPeople,
+      pricePerPerson: expedition.pricePerPerson,
+      difficulty: expedition.difficulty,
+    });
     setEditingId(expedition.id);
     setShowForm(true);
   };
@@ -174,7 +183,7 @@ export default function ExpeditionsPage() {
             />
             <select
               value={formData.difficulty}
-              onChange={(e) => setFormData({ ...formData, difficulty: e.target.value as any })}
+              onChange={(e) => setFormData({ ...formData, difficulty: e.target.value as 'fácil' | 'intermediária' | 'difícil' })}
               className="input"
             >
               <option value="fácil">Fácil</option>

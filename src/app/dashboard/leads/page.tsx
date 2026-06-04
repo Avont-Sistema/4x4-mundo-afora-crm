@@ -63,7 +63,7 @@ export default function LeadsPage() {
     phone: '',
     whatsapp: '',
     source: 'website',
-    status: 'novo',
+    status: 'novo' as 'novo' | 'qualificado' | 'em_negociacao' | 'perdido' | 'convertido',
     notes: '',
   });
 
@@ -98,7 +98,15 @@ export default function LeadsPage() {
   };
 
   const handleEditLead = (lead: Lead) => {
-    setFormData(lead);
+    setFormData({
+      name: lead.name,
+      email: lead.email || '',
+      phone: lead.phone || '',
+      whatsapp: lead.whatsapp || '',
+      source: lead.source,
+      status: lead.status,
+      notes: lead.notes || '',
+    });
     setEditingId(lead.id);
     setShowForm(true);
   };
@@ -187,7 +195,7 @@ export default function LeadsPage() {
             </select>
             <select
               value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+              onChange={(e) => setFormData({ ...formData, status: e.target.value as 'novo' | 'qualificado' | 'em_negociacao' | 'perdido' | 'convertido' })}
               className="input"
             >
               <option value="novo">Novo</option>

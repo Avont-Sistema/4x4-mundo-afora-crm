@@ -77,7 +77,14 @@ export default function SuppliersPage() {
   };
 
   const handleEditSupplier = (supplier: Supplier) => {
-    setFormData(supplier);
+    setFormData({
+      name: supplier.name,
+      type: supplier.type,
+      email: supplier.email || '',
+      phone: supplier.phone || '',
+      address: supplier.address || '',
+      rating: supplier.rating,
+    });
     setEditingId(supplier.id);
     setShowForm(true);
   };

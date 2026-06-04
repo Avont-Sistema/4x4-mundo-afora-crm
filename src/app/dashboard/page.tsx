@@ -1,7 +1,7 @@
 'use client';
 
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Users, MapPin, DollarSign, TrendingUp } from 'lucide-react';
+import { Users, MapPin, DollarSign } from 'lucide-react';
 
 const statsData = [
   { month: 'Jan', leads: 40, clientes: 24, revenue: 2400 },
@@ -109,7 +109,7 @@ export default function Dashboard() {
               fill="#8884d8"
               dataKey="value"
             >
-              {revenueData.map((entry, index) => (
+              {revenueData.map((_, index) => (
                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
               ))}
             </Pie>
