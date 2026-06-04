@@ -1,0 +1,116 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  name      String
+  password  String
+  role      String     @default("user")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Lead {
+  id          String   @id @default(cuid())
+  name        String
+  email       String?
+  phone       String?
+  whatsapp    String?
+  source      String   // website, instagram, referral, etc
+  status      String   @default("novo") // novo, qualificado, em_negociacao, perdido, convertido
+  notes       String?
+  conversions Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Client {
+  id         String    @id @default(cuid())
+  name       String
+  email      String?   @unique
+  phone      String?
+  whatsapp   String?
+  cpfCnpj    String?
+  address    String?
+  city       String?
+  state      String?
+  birthDate  DateTime?
+  bookings   Booking[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model Expedition {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  location    String
+  maxPeople   Int
+  pricePerPerson Float
+  difficulty  String // fácil, intermediária, difícil
+  images      String?  // JSON array of image URLs
+  bookings    Booking[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Booking {
+  id         String    @id @default(cuid())
+  client     Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId   String
+  expedition Expedition @relation(fields: [expeditionId], references: [id], onDelete: Cascade)
+  expeditionId String
+  quantity   Int
+  totalPrice Float
+  status     String    @default("pendente") // pendente, confirmada, cancelada
+  paymentStatus String @default("aguardando") // aguardando, pagto_parcial, pago, cancelado
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   // hotel, restaurante, transporte, guia, etc
+  email     String?
+  phone     String?
+  address   String?
+  documents String?  // JSON: {cnpj, bankAccount, etc}
+  rating    Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FinancialRecord {
+  id          String   @id @default(cuid())
+  type        String   // receita, despesa
+  category    String   // vendas, fornecedores, operacional, etc
+  description String
+  amount      Float
+  supplierId  String?  // se for despesa com fornecedor
+  bookingId   String?  // se for receita de booking
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model WhatsAppMessage {
+  id        String   @id @default(cuid())
+  leadId    String?
+  clientId  String?
+  message   String
+  sender    String   // "user" ou "bot"
+  createdAt DateTime @default(now())
+}
