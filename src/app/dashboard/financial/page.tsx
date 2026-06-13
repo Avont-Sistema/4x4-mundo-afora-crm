@@ -1,18 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from 'recharts';
+import Link from 'next/link';
 import {
   TrendingUp,
   TrendingDown,
@@ -22,6 +11,7 @@ import {
   Plus,
   Check,
   Trash2,
+  BarChart3,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatBRL, formatDate } from '@/lib/format';
@@ -69,9 +59,14 @@ export default function FinancialPage() {
           <h1 className="text-4xl font-bold">Financeiro</h1>
           <p className="text-gray-500 text-sm mt-1">Gestão completa baseada nas expedições</p>
         </div>
-        <button onClick={load} className="btn btn-secondary flex items-center gap-2">
-          <RefreshCw size={18} /> Atualizar
-        </button>
+        <div className="flex gap-2">
+          <Link href="/dashboard/statistics" className="btn btn-primary flex items-center gap-2">
+            <BarChart3 size={18} /> Estatísticas
+          </Link>
+          <button onClick={load} className="btn btn-secondary flex items-center gap-2">
+            <RefreshCw size={18} /> Atualizar
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -143,36 +138,25 @@ function Kpi({ title, value, icon, sub, subColor, highlight }: any) {
 function GeralTab({ data }: any) {
   const k = data.kpis;
   return (
-    <div className="space-y-6">
-      <div className="grid lg:grid-cols-2 gap-6">
-        <div className="card">
-          <h3 className="font-bold mb-4">Fluxo de Caixa (mensal)</h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={data.cashflow}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="label" />
-              <YAxis />
-              <Tooltip formatter={(v: number) => formatBRL(v)} />
-              <Legend />
-              <Bar dataKey="entradas" name="Entradas" fill="#10b981" />
-              <Bar dataKey="saidas" name="Saídas" fill="#ef4444" />
-            </BarChart>
-          </ResponsiveContainer>
+    <div className="grid lg:grid-cols-2 gap-6">
+      <div className="card">
+        <h3 className="font-bold mb-4">Resumo de recebíveis</h3>
+        <div className="space-y-3 text-sm">
+          <Row label="Faturamento contratado" value={formatBRL(k.contratado)} />
+          <Row label="Já recebido" value={formatBRL(k.recebido)} color="text-emerald-600" />
+          <Row label="A receber" value={formatBRL(k.aReceber)} color="text-blue-600" />
+          <Row label="Vencido" value={formatBRL(k.vencido)} color="text-rose-600" />
         </div>
-        <div className="card">
-          <h3 className="font-bold mb-4">Resumo</h3>
-          <div className="space-y-3 text-sm">
-            <Row label="Faturamento contratado" value={formatBRL(k.contratado)} />
-            <Row label="Já recebido" value={formatBRL(k.recebido)} color="text-emerald-600" />
-            <Row label="A receber" value={formatBRL(k.aReceber)} color="text-blue-600" />
-            <Row label="Vencido" value={formatBRL(k.vencido)} color="text-rose-600" />
-            <hr />
-            <Row label="Custo previsto" value={formatBRL(k.custoPrevisto)} color="text-rose-600" />
-            <Row label="A pagar (pendente)" value={formatBRL(k.aPagar)} color="text-rose-600" />
-            <hr />
-            <Row label="Lucro previsto" value={formatBRL(k.lucroPrevisto)} color="text-amber-600" bold />
-            <Row label="Potencial de vagas livres" value={formatBRL(k.previsaoPotencial)} color="text-gray-500" />
-          </div>
+      </div>
+      <div className="card">
+        <h3 className="font-bold mb-4">Resultado previsto</h3>
+        <div className="space-y-3 text-sm">
+          <Row label="Custo previsto" value={formatBRL(k.custoPrevisto)} color="text-rose-600" />
+          <Row label="A pagar (pendente)" value={formatBRL(k.aPagar)} color="text-rose-600" />
+          <hr />
+          <Row label="Lucro previsto" value={formatBRL(k.lucroPrevisto)} color="text-amber-600" bold />
+          <Row label="Potencial de vagas livres" value={formatBRL(k.previsaoPotencial)} color="text-gray-500" />
+          <Row label="Previsão total de faturamento" value={formatBRL(k.previsaoTotal)} bold />
         </div>
       </div>
     </div>
@@ -450,20 +434,20 @@ function PayableTable({ title, rows, onToggle, onRemove, paid }: any) {
 function FluxoTab({ data }: any) {
   return (
     <div className="space-y-6">
-      <div className="card">
-        <h3 className="font-bold mb-4">Entradas x Saídas x Saldo</h3>
-        <ResponsiveContainer width="100%" height={320}>
-          <LineChart data={data.cashflow}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="label" />
-            <YAxis />
-            <Tooltip formatter={(v: number) => formatBRL(v)} />
-            <Legend />
-            <Line type="monotone" dataKey="entradas" name="Entradas" stroke="#10b981" strokeWidth={2} />
-            <Line type="monotone" dataKey="saidas" name="Saídas" stroke="#ef4444" strokeWidth={2} />
-            <Line type="monotone" dataKey="saldo" name="Saldo" stroke="#0ea5e9" strokeWidth={2} />
-          </LineChart>
-        </ResponsiveContainer>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {data.cashflow.map((m: any) => (
+          <div key={m.month} className="card">
+            <p className="text-xs text-gray-400 uppercase">{m.label}</p>
+            <div className="mt-2 space-y-1 text-sm">
+              <Row label="Entradas" value={formatBRL(m.entradas)} color="text-emerald-600" />
+              <Row label="Saídas" value={formatBRL(m.saidas)} color="text-rose-600" />
+              <Row label="Saldo" value={formatBRL(m.saldo)} color={m.saldo >= 0 ? 'text-blue-600' : 'text-rose-600'} bold />
+            </div>
+          </div>
+        ))}
+        {data.cashflow.length === 0 && (
+          <div className="col-span-full text-center py-8 text-gray-400">Sem movimentações ainda</div>
+        )}
       </div>
 
       <div className="card p-0 overflow-x-auto">
@@ -502,20 +486,19 @@ function FluxoTab({ data }: any) {
 function SetorTab({ data }: any) {
   return (
     <div className="space-y-6">
-      <div className="card">
-        <h3 className="font-bold mb-4">Faturamento por setor</h3>
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={data.sectors}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="sector" />
-            <YAxis />
-            <Tooltip formatter={(v: number) => formatBRL(v)} />
-            <Legend />
-            <Bar dataKey="contratado" name="Contratado" fill="#0ea5e9" />
-            <Bar dataKey="recebido" name="Recebido" fill="#10b981" />
-            <Bar dataKey="custo" name="Custo" fill="#ef4444" />
-          </BarChart>
-        </ResponsiveContainer>
+      {/* resumo por setor */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {data.sectors.map((s: any) => (
+          <div key={s.sector} className="card">
+            <p className="font-semibold mb-2">{s.sector}</p>
+            <div className="space-y-1 text-sm">
+              <Row label="Contratado" value={formatBRL(s.contratado)} />
+              <Row label="Recebido" value={formatBRL(s.recebido)} color="text-emerald-600" />
+              <Row label="Custo" value={formatBRL(s.custo)} color="text-rose-600" />
+              <Row label="Lucro" value={formatBRL(s.lucro)} color="text-amber-600" bold />
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="card p-0 overflow-x-auto">
