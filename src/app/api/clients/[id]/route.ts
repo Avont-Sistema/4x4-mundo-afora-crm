@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { clientsStore } from '@/lib/clientsStore';
+import { buildClientDetail } from '@/lib/clientDetail';
 
+// GET -> detalhe completo (cliente + expedições + pagamentos + atividades)
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const client = clientsStore.get(id);
-  if (!client) {
+  const detail = buildClientDetail(id);
+  if (!detail) {
     return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
   }
-  return NextResponse.json({ client });
+  return NextResponse.json({ detail });
 }
 
 export async function PATCH(
@@ -20,6 +22,8 @@ export async function PATCH(
   try {
     const { id } = await params;
     const patch = await request.json();
+    if (patch.weight !== undefined) patch.weight = patch.weight ? Number(patch.weight) : undefined;
+    if (patch.height !== undefined) patch.height = patch.height ? Number(patch.height) : undefined;
     if (Array.isArray(patch.family)) {
       patch.family = patch.family.map((m: any) => ({
         id: m.id || crypto.randomUUID(),
@@ -28,6 +32,8 @@ export async function PATCH(
         birthDate: m.birthDate,
         document: m.document,
         isChild: Boolean(m.isChild),
+        weight: m.weight ? Number(m.weight) : undefined,
+        height: m.height ? Number(m.height) : undefined,
       }));
     }
     const client = clientsStore.update(id, patch);

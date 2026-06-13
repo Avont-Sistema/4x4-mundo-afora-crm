@@ -9,6 +9,8 @@ export interface FamilyMember {
   birthDate?: string;
   document?: string;
   isChild: boolean; // conta como "criança" no cálculo de custos/preço
+  weight?: number; // kg — usado em cadastros de fornecedores
+  height?: number; // cm
 }
 
 export interface Vehicle {
@@ -30,6 +32,8 @@ export interface Client extends BaseRecord {
   state?: string;
   job?: string; // emprego / profissão
   company?: string; // empresa
+  weight?: number; // kg — dados físicos do titular
+  height?: number; // cm
   family: FamilyMember[]; // cônjuge, filhos, etc.
   vehicle?: Vehicle; // carro
   notes?: string;
@@ -84,6 +88,18 @@ function seed(): Client[] {
 }
 
 export const clientsStore = createCollection<Client>('clients', seed);
+
+// Idade em anos a partir da data de nascimento
+export function ageFrom(birthDate?: string): number | null {
+  if (!birthDate) return null;
+  const d = new Date(birthDate.length <= 10 ? birthDate + 'T12:00:00' : birthDate);
+  if (isNaN(d.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+  return age;
+}
 
 // Conta quantos adultos e crianças há na "comitiva" do cliente (titular + família)
 export function countParty(client: Client): { adults: number; children: number } {

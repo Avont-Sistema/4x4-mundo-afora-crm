@@ -26,6 +26,8 @@ function normalizeFamily(family: any[]): FamilyMember[] {
     birthDate: m.birthDate,
     document: m.document,
     isChild: Boolean(m.isChild),
+    weight: m.weight ? Number(m.weight) : undefined,
+    height: m.height ? Number(m.height) : undefined,
   }));
 }
 
@@ -47,6 +49,8 @@ export async function POST(request: NextRequest) {
       state: body.state,
       job: body.job,
       company: body.company,
+      weight: body.weight ? Number(body.weight) : undefined,
+      height: body.height ? Number(body.height) : undefined,
       family: normalizeFamily(body.family),
       vehicle: body.vehicle,
       notes: body.notes,
