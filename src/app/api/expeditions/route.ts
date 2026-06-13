@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
     }
     const expedition = expeditionsStore.create({
       routeName: body.routeName,
+      sector: body.sector,
       description: body.description,
       location: body.location,
       startDate: body.startDate,

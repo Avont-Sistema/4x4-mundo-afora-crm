@@ -40,6 +40,7 @@ export interface ManualCost {
 
 export interface Expedition extends BaseRecord {
   routeName: string; // nome do roteiro
+  sector?: string; // setor/categoria para agrupar receitas (ex: "Expedições 4x4")
   description?: string;
   location?: string;
   startDate?: string;

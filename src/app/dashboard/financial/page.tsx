@@ -1,217 +1,551 @@
 'use client';
 
-import { useState } from 'react';
-import { Plus, TrendingUp, TrendingDown } from 'lucide-react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
+import {
+  TrendingUp,
+  TrendingDown,
+  Wallet,
+  Target,
+  RefreshCw,
+  Plus,
+  Check,
+  Trash2,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import { formatBRL, formatDate } from '@/lib/format';
 
-interface FinancialRecord {
-  id: string;
-  type: 'receita' | 'despesa';
-  category: string;
-  description: string;
-  amount: number;
-  date: string;
-}
-
-const mockRecords: FinancialRecord[] = [
-  { id: '1', type: 'receita', category: 'vendas', description: 'Expedição Lençóis', amount: 5000, date: '2024-06-01' },
-  { id: '2', type: 'despesa', category: 'fornecedores', description: 'Hotel Lençol Branco', amount: 1500, date: '2024-06-02' },
-  { id: '3', type: 'receita', category: 'vendas', description: 'Vale da Lua', amount: 3600, date: '2024-06-05' },
-];
-
-const chartData = [
-  { month: 'Jan', receita: 10000, despesa: 5000 },
-  { month: 'Fev', receita: 12000, despesa: 6000 },
-  { month: 'Mar', receita: 15000, despesa: 7000 },
-  { month: 'Abr', receita: 13000, despesa: 6500 },
-  { month: 'Mai', receita: 18000, despesa: 8000 },
-  { month: 'Jun', receita: 21000, despesa: 9000 },
-];
+type Tab = 'geral' | 'receber' | 'pagar' | 'fluxo' | 'setor';
 
 export default function FinancialPage() {
-  const [records, setRecords] = useState<FinancialRecord[]>(mockRecords);
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    type: 'receita' as const,
-    category: 'vendas',
-    description: '',
-    amount: 0,
-    date: new Date().toISOString().split('T')[0],
+  const [tab, setTab] = useState<Tab>('geral');
+  const [data, setData] = useState<any>(null);
+  const [payables, setPayables] = useState<any[]>([]);
+  const [expeditions, setExpeditions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [s, p, e] = await Promise.all([
+      fetch('/api/finance/summary').then((r) => r.json()),
+      fetch('/api/payables').then((r) => r.json()),
+      fetch('/api/expeditions').then((r) => r.json()),
+    ]);
+    setData(s);
+    setPayables(p.payables || []);
+    setExpeditions(e.expeditions || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (loading || !data) {
+    return (
+      <div className="text-center py-20 text-gray-400">
+        <RefreshCw className="w-8 h-8 mx-auto mb-3 animate-spin" /> Carregando financeiro...
+      </div>
+    );
+  }
+
+  const k = data.kpis;
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-4xl font-bold">Financeiro</h1>
+          <p className="text-gray-500 text-sm mt-1">Gestão completa baseada nas expedições</p>
+        </div>
+        <button onClick={load} className="btn btn-secondary flex items-center gap-2">
+          <RefreshCw size={18} /> Atualizar
+        </button>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <Kpi
+          title="A Receber"
+          value={formatBRL(k.aReceber)}
+          icon={<Wallet className="text-blue-600" />}
+          sub={k.vencido > 0 ? `${formatBRL(k.vencido)} vencido` : 'em dia'}
+          subColor={k.vencido > 0 ? 'text-rose-600' : 'text-emerald-600'}
+          highlight
+        />
+        <Kpi title="Recebido" value={formatBRL(k.recebido)} icon={<TrendingUp className="text-emerald-600" />} />
+        <Kpi title="A Pagar" value={formatBRL(k.aPagar)} icon={<TrendingDown className="text-rose-600" />} />
+        <Kpi
+          title="Previsão Faturamento"
+          value={formatBRL(k.previsaoTotal)}
+          icon={<Target className="text-amber-600" />}
+          sub={`${formatBRL(k.contratado)} contratado`}
+        />
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-6 border-b border-gray-200 mb-6 overflow-x-auto">
+        {[
+          { k: 'geral', label: 'Visão Geral' },
+          { k: 'receber', label: 'A Receber' },
+          { k: 'pagar', label: 'A Pagar' },
+          { k: 'fluxo', label: 'Fluxo de Caixa' },
+          { k: 'setor', label: 'Por Setor' },
+        ].map((t) => (
+          <button
+            key={t.k}
+            onClick={() => setTab(t.k as Tab)}
+            className={`pb-3 text-sm font-medium whitespace-nowrap ${
+              tab === t.k ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'geral' && <GeralTab data={data} />}
+      {tab === 'receber' && <ReceberTab data={data} onRefresh={load} />}
+      {tab === 'pagar' && (
+        <PagarTab payables={payables} expeditions={expeditions} onRefresh={load} />
+      )}
+      {tab === 'fluxo' && <FluxoTab data={data} />}
+      {tab === 'setor' && <SetorTab data={data} />}
+    </div>
+  );
+}
+
+function Kpi({ title, value, icon, sub, subColor, highlight }: any) {
+  return (
+    <div className={`card ${highlight ? 'ring-2 ring-blue-200' : ''}`}>
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] uppercase tracking-wide text-gray-400">{title}</p>
+        {icon}
+      </div>
+      <p className="text-2xl font-bold mt-1">{value}</p>
+      {sub && <p className={`text-xs mt-1 ${subColor || 'text-gray-400'}`}>{sub}</p>}
+    </div>
+  );
+}
+
+// ── Visão Geral ──────────────────────────────────────────────────────────
+function GeralTab({ data }: any) {
+  const k = data.kpis;
+  return (
+    <div className="space-y-6">
+      <div className="grid lg:grid-cols-2 gap-6">
+        <div className="card">
+          <h3 className="font-bold mb-4">Fluxo de Caixa (mensal)</h3>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={data.cashflow}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="label" />
+              <YAxis />
+              <Tooltip formatter={(v: number) => formatBRL(v)} />
+              <Legend />
+              <Bar dataKey="entradas" name="Entradas" fill="#10b981" />
+              <Bar dataKey="saidas" name="Saídas" fill="#ef4444" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="card">
+          <h3 className="font-bold mb-4">Resumo</h3>
+          <div className="space-y-3 text-sm">
+            <Row label="Faturamento contratado" value={formatBRL(k.contratado)} />
+            <Row label="Já recebido" value={formatBRL(k.recebido)} color="text-emerald-600" />
+            <Row label="A receber" value={formatBRL(k.aReceber)} color="text-blue-600" />
+            <Row label="Vencido" value={formatBRL(k.vencido)} color="text-rose-600" />
+            <hr />
+            <Row label="Custo previsto" value={formatBRL(k.custoPrevisto)} color="text-rose-600" />
+            <Row label="A pagar (pendente)" value={formatBRL(k.aPagar)} color="text-rose-600" />
+            <hr />
+            <Row label="Lucro previsto" value={formatBRL(k.lucroPrevisto)} color="text-amber-600" bold />
+            <Row label="Potencial de vagas livres" value={formatBRL(k.previsaoPotencial)} color="text-gray-500" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value, color, bold }: any) {
+  return (
+    <div className="flex justify-between">
+      <span className="text-gray-500">{label}</span>
+      <span className={`${color || ''} ${bold ? 'font-bold' : 'font-medium'}`}>{value}</span>
+    </div>
+  );
+}
+
+// ── A Receber ───────────────────────────────────────────────────────────
+function ReceberTab({ data, onRefresh }: any) {
+  const [filter, setFilter] = useState<'todos' | 'vencido' | 'a_vencer'>('todos');
+  const rows = data.receivables.filter((r: any) => {
+    if (filter === 'todos') return r.saldo > 0;
+    return r.status === filter;
   });
 
-  const totalReceita = records.filter((r) => r.type === 'receita').reduce((sum, r) => sum + r.amount, 0);
-  const totalDespesa = records.filter((r) => r.type === 'despesa').reduce((sum, r) => sum + r.amount, 0);
-  const lucro = totalReceita - totalDespesa;
-  const margemLucro = totalReceita > 0 ? (lucro / totalReceita) * 100 : 0;
-
-  const handleAddRecord = () => {
-    setRecords([...records, { ...formData, id: Date.now().toString() }]);
-    setFormData({
-      type: 'receita',
-      category: 'vendas',
-      description: '',
-      amount: 0,
-      date: new Date().toISOString().split('T')[0],
+  const receber = async (r: any) => {
+    const valor = prompt(`Receber de ${r.clientName}\nSaldo: ${formatBRL(r.saldo)}\n\nValor recebido:`, String(r.saldo));
+    if (!valor) return;
+    const res = await fetch(`/api/expeditions/${r.expeditionId}/enrollments/${r.enrollmentId}/payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount: Number(valor), method: 'pix' }),
     });
-    setShowForm(false);
+    if (res.ok) {
+      toast.success('Recebimento registrado');
+      onRefresh();
+    } else toast.error('Erro ao registrar');
+  };
+
+  const statusBadge: Record<string, string> = {
+    vencido: 'bg-rose-100 text-rose-700',
+    a_vencer: 'bg-amber-100 text-amber-700',
+    pago: 'bg-emerald-100 text-emerald-700',
   };
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-4xl font-bold">Financeiro</h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="btn btn-primary flex items-center gap-2"
-        >
-          <Plus size={20} />
-          Novo Registro
-        </button>
+      <div className="flex gap-2 mb-4">
+        {(['todos', 'vencido', 'a_vencer'] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`px-3 py-1.5 rounded-lg text-sm ${
+              filter === f ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
+            }`}
+          >
+            {f === 'todos' ? 'Em aberto' : f === 'vencido' ? 'Vencidos' : 'A vencer'}
+          </button>
+        ))}
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="card">
-          <p className="text-gray-600 text-sm mb-2">Total Receita</p>
-          <p className="text-3xl font-bold text-green-600 flex items-center gap-2">
-            <TrendingUp size={24} />
-            R$ {totalReceita.toLocaleString('pt-BR')}
-          </p>
-        </div>
-        <div className="card">
-          <p className="text-gray-600 text-sm mb-2">Total Despesa</p>
-          <p className="text-3xl font-bold text-red-600 flex items-center gap-2">
-            <TrendingDown size={24} />
-            R$ {totalDespesa.toLocaleString('pt-BR')}
-          </p>
-        </div>
-        <div className="card">
-          <p className="text-gray-600 text-sm mb-2">Lucro Líquido</p>
-          <p className={`text-3xl font-bold flex items-center gap-2 ${lucro >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            R$ {lucro.toLocaleString('pt-BR')}
-          </p>
-        </div>
-        <div className="card">
-          <p className="text-gray-600 text-sm mb-2">Margem de Lucro</p>
-          <p className={`text-3xl font-bold ${margemLucro >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {margemLucro.toFixed(1)}%
-          </p>
-        </div>
-      </div>
-
-      {/* Charts */}
-      <div className="grid lg:grid-cols-2 gap-6 mb-8">
-        <div className="card">
-          <h2 className="text-xl font-bold mb-4">Receita vs Despesa (Mensal)</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="receita" fill="#10b981" />
-              <Bar dataKey="despesa" fill="#ef4444" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="card">
-          <h2 className="text-xl font-bold mb-4">Lucratividade Mensal</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart
-              data={chartData.map((d) => ({
-                ...d,
-                lucro: d.receita - d.despesa,
-              }))}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="lucro" stroke="#0ea5e9" strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Form Modal */}
-      {showForm && (
-        <div className="card mb-6 bg-blue-50 border-blue-200">
-          <h2 className="text-2xl font-bold mb-4">Novo Registro Financeiro</h2>
-          <div className="grid md:grid-cols-2 gap-4">
-            <select
-              value={formData.type}
-              onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
-              className="input"
-            >
-              <option value="receita">Receita</option>
-              <option value="despesa">Despesa</option>
-            </select>
-            <select
-              value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-              className="input"
-            >
-              <option value="vendas">Vendas</option>
-              <option value="fornecedores">Fornecedores</option>
-              <option value="operacional">Operacional</option>
-              <option value="outro">Outro</option>
-            </select>
-            <input
-              type="text"
-              placeholder="Descrição"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="input md:col-span-2"
-            />
-            <input
-              type="number"
-              placeholder="Valor (R$)"
-              value={formData.amount}
-              onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) })}
-              className="input"
-            />
-            <input
-              type="date"
-              value={formData.date}
-              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-              className="input"
-            />
-          </div>
-          <div className="flex gap-2 mt-4">
-            <button onClick={handleAddRecord} className="btn btn-primary">
-              Adicionar Registro
-            </button>
-            <button onClick={() => setShowForm(false)} className="btn btn-secondary">
-              Cancelar
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Records Table */}
-      <div className="card overflow-x-auto">
-        <h2 className="text-xl font-bold mb-4">Registros Recentes</h2>
-        <table className="w-full text-left">
-          <thead className="border-b border-gray-300">
+      <div className="card overflow-x-auto p-0">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-gray-200 text-left">
             <tr>
-              <th className="px-6 py-3 font-semibold">Descrição</th>
-              <th className="px-6 py-3 font-semibold">Categoria</th>
-              <th className="px-6 py-3 font-semibold">Data</th>
-              <th className="px-6 py-3 font-semibold text-right">Valor</th>
+              <th className="px-4 py-3 font-semibold">Cliente</th>
+              <th className="px-4 py-3 font-semibold">Expedição</th>
+              <th className="px-4 py-3 font-semibold">Vencimento</th>
+              <th className="px-4 py-3 font-semibold text-right">Valor</th>
+              <th className="px-4 py-3 font-semibold text-right">Pago</th>
+              <th className="px-4 py-3 font-semibold text-right">Saldo</th>
+              <th className="px-4 py-3 font-semibold text-center">Status</th>
+              <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
-            {records.map((record) => (
-              <tr key={record.id} className="border-b border-gray-200 hover:bg-gray-50">
-                <td className="px-6 py-4">{record.description}</td>
-                <td className="px-6 py-4 text-sm text-gray-600">{record.category}</td>
-                <td className="px-6 py-4 text-sm">{new Date(record.date).toLocaleDateString('pt-BR')}</td>
-                <td className={`px-6 py-4 text-right font-bold ${record.type === 'receita' ? 'text-green-600' : 'text-red-600'}`}>
-                  {record.type === 'receita' ? '+' : '-'} R$ {record.amount.toLocaleString('pt-BR')}
+            {rows.map((r: any) => (
+              <tr key={r.enrollmentId} className="border-b border-gray-100 hover:bg-gray-50">
+                <td className="px-4 py-3 font-medium">{r.clientName}</td>
+                <td className="px-4 py-3 text-gray-500">{r.expeditionName}</td>
+                <td className="px-4 py-3 text-gray-500">{formatDate(r.dueDate)}</td>
+                <td className="px-4 py-3 text-right">{formatBRL(r.total)}</td>
+                <td className="px-4 py-3 text-right text-emerald-600">{formatBRL(r.paid)}</td>
+                <td className="px-4 py-3 text-right font-bold">{formatBRL(r.saldo)}</td>
+                <td className="px-4 py-3 text-center">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${statusBadge[r.status]}`}>
+                    {r.status === 'a_vencer' ? 'a vencer' : r.status}
+                  </span>
                 </td>
+                <td className="px-4 py-3 text-right">
+                  <button onClick={() => receber(r)} className="btn btn-primary text-xs px-3 py-1">
+                    Receber
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={8} className="text-center py-10 text-gray-400">
+                  Nada a receber neste filtro 🎉
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── A Pagar ─────────────────────────────────────────────────────────────
+function PagarTab({ payables, expeditions, onRefresh }: any) {
+  const [desc, setDesc] = useState('');
+  const [amount, setAmount] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [type, setType] = useState('despesa');
+  const [genExp, setGenExp] = useState('');
+
+  const add = async () => {
+    if (!desc || !amount) {
+      toast.error('Preencha descrição e valor');
+      return;
+    }
+    const res = await fetch('/api/payables', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: desc, amount: Number(amount), dueDate, type }),
+    });
+    if (res.ok) {
+      setDesc('');
+      setAmount('');
+      setDueDate('');
+      toast.success('Conta lançada');
+      onRefresh();
+    } else toast.error('Erro');
+  };
+
+  const togglePaid = async (p: any) => {
+    await fetch(`/api/payables/${p.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: p.status === 'pago' ? 'pendente' : 'pago' }),
+    });
+    onRefresh();
+  };
+
+  const remove = async (id: string) => {
+    await fetch(`/api/payables/${id}`, { method: 'DELETE' });
+    onRefresh();
+  };
+
+  const generate = async () => {
+    if (!genExp) {
+      toast.error('Escolha a expedição');
+      return;
+    }
+    const res = await fetch('/api/payables/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expeditionId: genExp }),
+    });
+    const d = await res.json();
+    if (res.ok) {
+      toast.success(`${d.created} conta(s) de fornecedor gerada(s)`);
+      onRefresh();
+    } else toast.error(d.error || 'Erro');
+  };
+
+  const pendentes = payables.filter((p: any) => p.status === 'pendente');
+  const pagos = payables.filter((p: any) => p.status === 'pago');
+
+  return (
+    <div className="space-y-5">
+      {/* nova conta + gerar */}
+      <div className="card flex flex-wrap items-end gap-3">
+        <div className="flex-1 min-w-[180px]">
+          <label className="text-xs text-gray-500">Descrição</label>
+          <input className="input" placeholder="Ex: Combustível, hotel..." value={desc} onChange={(e) => setDesc(e.target.value)} />
+        </div>
+        <div className="w-32">
+          <label className="text-xs text-gray-500">Valor</label>
+          <input type="number" className="input" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        </div>
+        <div className="w-40">
+          <label className="text-xs text-gray-500">Vencimento</label>
+          <input type="date" className="input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+        </div>
+        <div className="w-36">
+          <label className="text-xs text-gray-500">Tipo</label>
+          <select className="input" value={type} onChange={(e) => setType(e.target.value)}>
+            <option value="despesa">Despesa</option>
+            <option value="fornecedor">Fornecedor</option>
+            <option value="comissao">Comissão</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        <button onClick={add} className="btn btn-primary flex items-center gap-1">
+          <Plus size={16} /> Lançar
+        </button>
+      </div>
+
+      <div className="card flex flex-wrap items-end gap-3 bg-blue-50 border-blue-200">
+        <div className="flex-1 min-w-[220px]">
+          <label className="text-xs text-gray-600">Gerar contas dos fornecedores de uma expedição</label>
+          <select className="input" value={genExp} onChange={(e) => setGenExp(e.target.value)}>
+            <option value="">Selecione a expedição...</option>
+            {expeditions.map((e: any) => (
+              <option key={e.id} value={e.id}>
+                {e.routeName}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button onClick={generate} className="btn btn-secondary">
+          Gerar contas
+        </button>
+      </div>
+
+      {/* pendentes */}
+      <PayableTable title="Pendentes" rows={pendentes} onToggle={togglePaid} onRemove={remove} />
+      {pagos.length > 0 && (
+        <PayableTable title="Pagas" rows={pagos} onToggle={togglePaid} onRemove={remove} paid />
+      )}
+    </div>
+  );
+}
+
+function PayableTable({ title, rows, onToggle, onRemove, paid }: any) {
+  return (
+    <div className="card p-0 overflow-x-auto">
+      <h3 className="font-bold px-4 pt-4 pb-2">{title} ({rows.length})</h3>
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 border-y border-gray-200 text-left">
+          <tr>
+            <th className="px-4 py-2 font-semibold">Descrição</th>
+            <th className="px-4 py-2 font-semibold">Tipo</th>
+            <th className="px-4 py-2 font-semibold">Vencimento</th>
+            <th className="px-4 py-2 font-semibold text-right">Valor</th>
+            <th className="px-4 py-2 text-center">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((p: any) => (
+            <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50">
+              <td className="px-4 py-2 font-medium">{p.description}</td>
+              <td className="px-4 py-2 text-gray-500">{p.type}</td>
+              <td className="px-4 py-2 text-gray-500">{formatDate(p.dueDate)}</td>
+              <td className="px-4 py-2 text-right font-bold text-rose-600">{formatBRL(p.amount)}</td>
+              <td className="px-4 py-2">
+                <div className="flex items-center justify-center gap-1">
+                  <button
+                    onClick={() => onToggle(p)}
+                    title={paid ? 'Marcar pendente' : 'Marcar como pago'}
+                    className={`p-1 rounded ${paid ? 'text-gray-400 hover:bg-gray-100' : 'text-emerald-600 hover:bg-emerald-50'}`}
+                  >
+                    <Check size={16} />
+                  </button>
+                  <button onClick={() => onRemove(p.id)} className="p-1 hover:bg-rose-50 rounded">
+                    <Trash2 size={16} className="text-rose-500" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={5} className="text-center py-6 text-gray-400">Nenhuma conta</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── Fluxo de Caixa ─────────────────────────────────────────────────────────
+function FluxoTab({ data }: any) {
+  return (
+    <div className="space-y-6">
+      <div className="card">
+        <h3 className="font-bold mb-4">Entradas x Saídas x Saldo</h3>
+        <ResponsiveContainer width="100%" height={320}>
+          <LineChart data={data.cashflow}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="label" />
+            <YAxis />
+            <Tooltip formatter={(v: number) => formatBRL(v)} />
+            <Legend />
+            <Line type="monotone" dataKey="entradas" name="Entradas" stroke="#10b981" strokeWidth={2} />
+            <Line type="monotone" dataKey="saidas" name="Saídas" stroke="#ef4444" strokeWidth={2} />
+            <Line type="monotone" dataKey="saldo" name="Saldo" stroke="#0ea5e9" strokeWidth={2} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="card p-0 overflow-x-auto">
+        <h3 className="font-bold px-4 pt-4 pb-2">Recebimentos recentes</h3>
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-y border-gray-200 text-left">
+            <tr>
+              <th className="px-4 py-2 font-semibold">Data</th>
+              <th className="px-4 py-2 font-semibold">Pagador</th>
+              <th className="px-4 py-2 font-semibold">Expedição</th>
+              <th className="px-4 py-2 font-semibold">Forma</th>
+              <th className="px-4 py-2 font-semibold text-right">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.income.map((i: any, idx: number) => (
+              <tr key={idx} className="border-b border-gray-100">
+                <td className="px-4 py-2">{formatDate(i.date)}</td>
+                <td className="px-4 py-2 font-medium">{i.payer}</td>
+                <td className="px-4 py-2 text-gray-500">{i.expeditionName}</td>
+                <td className="px-4 py-2 text-gray-500">{i.method}</td>
+                <td className="px-4 py-2 text-right text-emerald-600 font-medium">{formatBRL(i.amount)}</td>
+              </tr>
+            ))}
+            {data.income.length === 0 && (
+              <tr><td colSpan={5} className="text-center py-6 text-gray-400">Nenhum recebimento ainda</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Por Setor ────────────────────────────────────────────────────────────
+function SetorTab({ data }: any) {
+  return (
+    <div className="space-y-6">
+      <div className="card">
+        <h3 className="font-bold mb-4">Faturamento por setor</h3>
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart data={data.sectors}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="sector" />
+            <YAxis />
+            <Tooltip formatter={(v: number) => formatBRL(v)} />
+            <Legend />
+            <Bar dataKey="contratado" name="Contratado" fill="#0ea5e9" />
+            <Bar dataKey="recebido" name="Recebido" fill="#10b981" />
+            <Bar dataKey="custo" name="Custo" fill="#ef4444" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="card p-0 overflow-x-auto">
+        <h3 className="font-bold px-4 pt-4 pb-2">Resultado por expedição</h3>
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-y border-gray-200 text-left">
+            <tr>
+              <th className="px-4 py-2 font-semibold">Expedição</th>
+              <th className="px-4 py-2 font-semibold">Setor</th>
+              <th className="px-4 py-2 font-semibold text-right">Contratado</th>
+              <th className="px-4 py-2 font-semibold text-right">Recebido</th>
+              <th className="px-4 py-2 font-semibold text-right">A Receber</th>
+              <th className="px-4 py-2 font-semibold text-right">Custo</th>
+              <th className="px-4 py-2 font-semibold text-right">Lucro</th>
+              <th className="px-4 py-2 font-semibold text-right">Margem</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.expeditionRevenue.map((e: any) => (
+              <tr key={e.expeditionId} className="border-b border-gray-100 hover:bg-gray-50">
+                <td className="px-4 py-2 font-medium">{e.expeditionName}</td>
+                <td className="px-4 py-2 text-gray-500">{e.sector}</td>
+                <td className="px-4 py-2 text-right">{formatBRL(e.contratado)}</td>
+                <td className="px-4 py-2 text-right text-emerald-600">{formatBRL(e.recebido)}</td>
+                <td className="px-4 py-2 text-right text-blue-600">{formatBRL(e.aReceber)}</td>
+                <td className="px-4 py-2 text-right text-rose-600">{formatBRL(e.custo)}</td>
+                <td className={`px-4 py-2 text-right font-bold ${e.lucro >= 0 ? 'text-amber-600' : 'text-rose-600'}`}>
+                  {formatBRL(e.lucro)}
+                </td>
+                <td className="px-4 py-2 text-right">{e.margem.toFixed(0)}%</td>
               </tr>
             ))}
           </tbody>

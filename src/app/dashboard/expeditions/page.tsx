@@ -45,6 +45,7 @@ const statusLabels: Record<string, string> = {
 
 const emptyForm = {
   routeName: '',
+  sector: '',
   description: '',
   location: '',
   startDate: '',
@@ -228,6 +229,12 @@ export default function ExpeditionsPage() {
                   placeholder="Nome do roteiro *"
                   value={form.routeName}
                   onChange={(e) => setForm({ ...form, routeName: e.target.value })}
+                />
+                <input
+                  className="input md:col-span-2"
+                  placeholder="Setor / categoria (ex: Expedições 4x4) — opcional"
+                  value={form.sector}
+                  onChange={(e) => setForm({ ...form, sector: e.target.value })}
                 />
                 <textarea
                   className="input md:col-span-2 h-16"
