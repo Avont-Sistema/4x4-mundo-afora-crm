@@ -6,12 +6,13 @@ import { usePathname } from 'next/navigation';
 import {
   Menu, X, LogOut, BarChart3, Users, MapPin, DollarSign,
   MessageCircle, Settings, Mail, Plug, Calendar,
+  type LucideIcon,
 } from 'lucide-react';
 
 interface MenuItem {
   href: string;
   label: string;
-  icon: React.ComponentType<{ size?: number }>;
+  icon: LucideIcon;
   soon?: boolean;
 }
 
