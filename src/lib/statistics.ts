@@ -16,11 +16,11 @@ function monthLabel(key: string): string {
   return `${MONTHS[Number(m) - 1]}/${y.slice(2)}`;
 }
 
-export function buildStatistics() {
-  const expeditions = expeditionsStore.all();
-  const suppliers = suppliersStore.all();
-  const clients = clientsStore.all();
-  const leads = getLeads();
+export async function buildStatistics() {
+  const expeditions = await expeditionsStore.all();
+  const suppliers = await suppliersStore.all();
+  const clients = await clientsStore.all();
+  const leads = await getLeads();
 
   // ── Por expedição ──
   const perExp = expeditions.map((e) => {

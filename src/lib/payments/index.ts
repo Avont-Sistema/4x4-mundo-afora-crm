@@ -100,17 +100,17 @@ export async function createCharge(input: ChargeInput): Promise<ChargeResult> {
 }
 
 // Chamado pelo webhook do Asaas quando o pagamento é confirmado.
-export function recordConfirmedPayment(
+export async function recordConfirmedPayment(
   externalReference: string,
   amount: number,
   method = 'pix'
-): { ok: boolean } {
+): Promise<{ ok: boolean }> {
   if (!externalReference) return { ok: false };
 
   // Caso 1: pagamento ligado a uma matrícula existente
   if (externalReference.startsWith('enrollment:')) {
     const enrId = externalReference.split(':')[1];
-    for (const exp of expeditionsStore.all()) {
+    for (const exp of await expeditionsStore.all()) {
       const enr = exp.enrollments.find((e) => e.id === enrId);
       if (enr) {
         enr.payments.push({
@@ -122,7 +122,7 @@ export function recordConfirmedPayment(
         });
         enr.status = 'confirmado';
         enr.updatedAt = new Date().toISOString();
-        expeditionsStore.touch(exp.id);
+        await expeditionsStore.touch(exp.id);
         return { ok: true };
       }
     }
@@ -134,15 +134,15 @@ export function recordConfirmedPayment(
   if (m) {
     const phone = m[1];
     const expId = m[2];
-    const exp = expId ? expeditionsStore.get(expId) : undefined;
+    const exp = expId ? await expeditionsStore.get(expId) : undefined;
     if (!exp) return { ok: false };
 
     const n = phone.replace(/\D/g, '');
-    let client = clientsStore
-      .all()
-      .find((c) => (c.phone || '').replace(/\D/g, '') === n);
+    let client = (await clientsStore.all()).find(
+      (c) => (c.phone || '').replace(/\D/g, '') === n
+    );
     if (!client) {
-      client = clientsStore.create({
+      client = await clientsStore.create({
         name: phone || 'Cliente WhatsApp',
         phone,
         whatsapp: phone,
@@ -150,7 +150,7 @@ export function recordConfirmedPayment(
         origin: 'whatsapp_bot',
       });
     }
-    upsertLeadFromContact({ name: client.name, phone, source: 'whatsapp', stage: 'finalizado' });
+    await upsertLeadFromContact({ name: client.name, phone, source: 'whatsapp', stage: 'finalizado' });
 
     let enr = exp.enrollments.find(
       (e) => e.clientId === client!.id && e.status !== 'cancelado'
@@ -180,7 +180,7 @@ export function recordConfirmedPayment(
     });
     enr.status = 'confirmado';
     enr.updatedAt = new Date().toISOString();
-    expeditionsStore.touch(exp.id);
+    await expeditionsStore.touch(exp.id);
     return { ok: true };
   }
 

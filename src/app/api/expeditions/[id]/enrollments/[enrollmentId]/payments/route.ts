@@ -8,7 +8,7 @@ export async function POST(
 ) {
   try {
     const { id, enrollmentId } = await params;
-    const exp = expeditionsStore.get(id);
+    const exp = await expeditionsStore.get(id);
     if (!exp) {
       return NextResponse.json({ error: 'Expedição não encontrada' }, { status: 404 });
     }
@@ -31,9 +31,9 @@ export async function POST(
     // confirma a matrícula automaticamente ao primeiro pagamento
     if (enr.status === 'reservado') enr.status = 'confirmado';
     enr.updatedAt = new Date().toISOString();
-    expeditionsStore.touch(exp.id);
+    await expeditionsStore.touch(exp.id);
     return NextResponse.json(
-      { expedition: buildExpeditionDetail(exp) },
+      { expedition: await buildExpeditionDetail(exp) },
       { status: 201 }
     );
   } catch (error: any) {
@@ -52,7 +52,7 @@ export async function DELETE(
   const { id, enrollmentId } = await params;
   const { searchParams } = new URL(request.url);
   const paymentId = searchParams.get('paymentId');
-  const exp = expeditionsStore.get(id);
+  const exp = await expeditionsStore.get(id);
   if (!exp) {
     return NextResponse.json({ error: 'Expedição não encontrada' }, { status: 404 });
   }
@@ -62,6 +62,6 @@ export async function DELETE(
   }
   enr.payments = enr.payments.filter((p) => p.id !== paymentId);
   enr.updatedAt = new Date().toISOString();
-  expeditionsStore.touch(exp.id);
-  return NextResponse.json({ expedition: buildExpeditionDetail(exp) });
+  await expeditionsStore.touch(exp.id);
+  return NextResponse.json({ expedition: await buildExpeditionDetail(exp) });
 }

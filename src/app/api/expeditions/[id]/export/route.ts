@@ -13,19 +13,19 @@ export async function GET(
   const { searchParams } = new URL(request.url);
   const supplierId = searchParams.get('supplierId');
 
-  const exp = expeditionsStore.get(id);
+  const exp = await expeditionsStore.get(id);
   if (!exp) {
     return NextResponse.json({ error: 'Expedição não encontrada' }, { status: 404 });
   }
   if (!supplierId) {
     return NextResponse.json({ error: 'supplierId é obrigatório' }, { status: 400 });
   }
-  const supplier = suppliersStore.get(supplierId);
+  const supplier = await suppliersStore.get(supplierId);
   if (!supplier) {
     return NextResponse.json({ error: 'Fornecedor não encontrado' }, { status: 404 });
   }
 
-  const { csv, filename } = buildSupplierCSV(exp, supplier);
+  const { csv, filename } = await buildSupplierCSV(exp, supplier);
 
   return new NextResponse(csv, {
     status: 200,

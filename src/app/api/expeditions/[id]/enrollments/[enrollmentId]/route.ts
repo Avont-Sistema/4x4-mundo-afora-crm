@@ -8,7 +8,7 @@ export async function PATCH(
 ) {
   try {
     const { id, enrollmentId } = await params;
-    const exp = expeditionsStore.get(id);
+    const exp = await expeditionsStore.get(id);
     if (!exp) {
       return NextResponse.json({ error: 'Expedição não encontrada' }, { status: 404 });
     }
@@ -23,8 +23,8 @@ export async function PATCH(
     if (body.adults !== undefined) enr.adults = Number(body.adults);
     if (body.children !== undefined) enr.children = Number(body.children);
     enr.updatedAt = new Date().toISOString();
-    expeditionsStore.touch(exp.id);
-    return NextResponse.json({ expedition: buildExpeditionDetail(exp) });
+    await expeditionsStore.touch(exp.id);
+    return NextResponse.json({ expedition: await buildExpeditionDetail(exp) });
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message || 'Falha ao atualizar matrícula' },
@@ -39,7 +39,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; enrollmentId: string }> }
 ) {
   const { id, enrollmentId } = await params;
-  const exp = expeditionsStore.get(id);
+  const exp = await expeditionsStore.get(id);
   if (!exp) {
     return NextResponse.json({ error: 'Expedição não encontrada' }, { status: 404 });
   }
@@ -48,6 +48,6 @@ export async function DELETE(
   if (exp.enrollments.length === before) {
     return NextResponse.json({ error: 'Matrícula não encontrada' }, { status: 404 });
   }
-  expeditionsStore.touch(exp.id);
-  return NextResponse.json({ expedition: buildExpeditionDetail(exp) });
+  await expeditionsStore.touch(exp.id);
+  return NextResponse.json({ expedition: await buildExpeditionDetail(exp) });
 }

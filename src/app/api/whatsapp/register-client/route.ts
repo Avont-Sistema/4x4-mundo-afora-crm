@@ -34,18 +34,16 @@ export async function POST(request: NextRequest) {
     // 1. dedupe de cliente por telefone
     const phone: string | undefined = body.phone;
     const normalized = (phone || '').replace(/\D/g, '');
-    let client = clientsStore
-      .all()
-      .find(
-        (c) =>
-          normalized &&
-          ((c.phone || '').replace(/\D/g, '') === normalized ||
-            (c.whatsapp || '').replace(/\D/g, '') === normalized)
-      );
+    let client = (await clientsStore.all()).find(
+      (c) =>
+        normalized &&
+        ((c.phone || '').replace(/\D/g, '') === normalized ||
+          (c.whatsapp || '').replace(/\D/g, '') === normalized)
+    );
 
     let clientCreated = false;
     if (!client) {
-      client = clientsStore.create({
+      client = await clientsStore.create({
         name: body.name || phone || 'Cliente WhatsApp',
         phone,
         whatsapp: phone,
@@ -58,13 +56,14 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. move o lead para finalizado (conversão)
-    const lead = findLeadByPhone(phone);
-    if (lead) updateLead(lead.id, { stage: 'finalizado' });
+    const lead = await findLeadByPhone(phone);
+    if (lead) await updateLead(lead.id, { stage: 'finalizado' });
 
     // 3 + 4. matrícula + pagamento (se a expedição foi informada)
     let enrollment = null;
+    let expeditionDetail = null;
     if (body.expeditionId) {
-      const exp = expeditionsStore.get(body.expeditionId);
+      const exp = await expeditionsStore.get(body.expeditionId);
       if (exp) {
         let enr = exp.enrollments.find(
           (e) => e.clientId === client!.id && e.status !== 'cancelado'
@@ -102,8 +101,9 @@ export async function POST(request: NextRequest) {
           enr.status = 'confirmado';
         }
         enr.updatedAt = new Date().toISOString();
-        expeditionsStore.touch(exp.id);
+        await expeditionsStore.touch(exp.id);
         enrollment = enr;
+        expeditionDetail = await buildExpeditionDetail(exp);
       }
     }
 
@@ -112,9 +112,7 @@ export async function POST(request: NextRequest) {
       clientCreated,
       client,
       enrollment,
-      expedition: body.expeditionId
-        ? buildExpeditionDetail(expeditionsStore.get(body.expeditionId)!)
-        : null,
+      expedition: expeditionDetail,
     });
   } catch (error: any) {
     return NextResponse.json(

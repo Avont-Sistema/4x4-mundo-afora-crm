@@ -1,25 +1,27 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
+// Cliente Supabase para uso EXCLUSIVO no servidor (rotas /api e libs).
+// Usa a chave secreta (service role) — nunca exponha no navegador.
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseSecretKey =
+  process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-let supabaseInstance: SupabaseClient | null = null;
+// Quando ambos estão presentes, a persistência usa o Supabase.
+// Caso contrário (ex.: dev local sem credenciais) cai no JSON em .data/.
+export const isSupabaseEnabled = Boolean(supabaseUrl && supabaseSecretKey);
+
+let instance: SupabaseClient | null = null;
 
 export function getSupabase(): SupabaseClient {
-  if (!supabaseUrl || !supabaseAnonKey) {
+  if (!supabaseUrl || !supabaseSecretKey) {
     throw new Error(
-      'Supabase credentials not found. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY'
+      'Supabase não configurado: defina NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SECRET_KEY'
     );
   }
-  if (!supabaseInstance) {
-    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey);
+  if (!instance) {
+    instance = createClient(supabaseUrl, supabaseSecretKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
   }
-  return supabaseInstance;
+  return instance;
 }
-
-export const supabase = new Proxy({} as SupabaseClient, {
-  get: (_target, prop) => {
-    const client = getSupabase();
-    return (client as any)[prop];
-  },
-});

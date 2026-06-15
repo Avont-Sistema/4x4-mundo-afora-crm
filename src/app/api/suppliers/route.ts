@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { suppliersStore, type SupplierType, type BillingMode } from '@/lib/suppliersStore';
 
 export async function GET() {
-  return NextResponse.json({ suppliers: suppliersStore.all() });
+  return NextResponse.json({ suppliers: await suppliersStore.all() });
 }
 
 export async function POST(request: NextRequest) {
@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     if (!body.name) {
       return NextResponse.json({ error: 'Nome é obrigatório' }, { status: 400 });
     }
-    const supplier = suppliersStore.create({
+    const supplier = await suppliersStore.create({
       name: body.name,
       type: (body.type as SupplierType) || 'outro',
       email: body.email,

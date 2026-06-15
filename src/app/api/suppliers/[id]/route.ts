@@ -11,7 +11,7 @@ export async function PATCH(
     ['costPerPerson', 'costPerChild', 'costPerCar', 'costPerRoom', 'flatFee', 'rating'].forEach((k) => {
       if (patch[k] !== undefined) patch[k] = Number(patch[k]);
     });
-    const supplier = suppliersStore.update(id, patch);
+    const supplier = await suppliersStore.update(id, patch);
     if (!supplier) {
       return NextResponse.json({ error: 'Fornecedor não encontrado' }, { status: 404 });
     }
@@ -29,7 +29,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const ok = suppliersStore.remove(id);
+  const ok = await suppliersStore.remove(id);
   if (!ok) {
     return NextResponse.json({ error: 'Fornecedor não encontrado' }, { status: 404 });
   }

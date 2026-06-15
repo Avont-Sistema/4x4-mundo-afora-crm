@@ -6,11 +6,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const exp = expeditionsStore.get(id);
+  const exp = await expeditionsStore.get(id);
   if (!exp) {
     return NextResponse.json({ error: 'Expedição não encontrada' }, { status: 404 });
   }
-  return NextResponse.json({ expedition: buildExpeditionDetail(exp) });
+  return NextResponse.json({ expedition: await buildExpeditionDetail(exp) });
 }
 
 export async function PATCH(
@@ -24,11 +24,11 @@ export async function PATCH(
     ['slots', 'pricePerPerson', 'pricePerChild', 'revenueGoal'].forEach((k) => {
       if (patch[k] !== undefined) patch[k] = Number(patch[k]);
     });
-    const exp = expeditionsStore.update(id, patch);
+    const exp = await expeditionsStore.update(id, patch);
     if (!exp) {
       return NextResponse.json({ error: 'Expedição não encontrada' }, { status: 404 });
     }
-    return NextResponse.json({ expedition: buildExpeditionDetail(exp) });
+    return NextResponse.json({ expedition: await buildExpeditionDetail(exp) });
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message || 'Falha ao atualizar' },
@@ -42,7 +42,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const ok = expeditionsStore.remove(id);
+  const ok = await expeditionsStore.remove(id);
   if (!ok) {
     return NextResponse.json({ error: 'Expedição não encontrada' }, { status: 404 });
   }

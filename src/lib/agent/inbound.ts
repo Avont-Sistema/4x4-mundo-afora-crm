@@ -30,8 +30,8 @@ export async function processInbound(
 
   // 2. auto-cadastro de lead (telefone novo => novo lead atendido pela IA)
   let leadCreated = false;
-  const existingLead = findLeadByPhone(phone);
-  const up = upsertLeadFromContact({
+  const existingLead = await findLeadByPhone(phone);
+  const up = await upsertLeadFromContact({
     name: contactName || existingLead?.name || phone,
     phone,
     whatsapp: phone,

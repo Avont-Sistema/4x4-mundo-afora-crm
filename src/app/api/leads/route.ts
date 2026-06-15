@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   const handledBy = searchParams.get('handledBy');
   const q = searchParams.get('q')?.toLowerCase();
 
-  let leads = getLeads();
+  let leads = await getLeads();
 
   if (stage) leads = leads.filter((l) => l.stage === stage);
   if (source) leads = leads.filter((l) => l.source === source);
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Nome é obrigatório' }, { status: 400 });
     }
 
-    const lead = createLead({
+    const lead = await createLead({
       name: body.name,
       email: body.email,
       phone: body.phone,

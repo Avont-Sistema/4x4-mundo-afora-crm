@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
       payment &&
       (event === 'PAYMENT_RECEIVED' || event === 'PAYMENT_CONFIRMED')
     ) {
-      const result = recordConfirmedPayment(
+      const result = await recordConfirmedPayment(
         payment.externalReference,
         Number(payment.value) || 0,
         (payment.billingType || 'asaas').toLowerCase()

@@ -91,7 +91,7 @@ export const expeditionsStore = createCollection<Expedition>('expeditions', seed
 
 // Matricula um cliente numa expedição (reutilizado pela API e pelo formulário público).
 // Se adults/children/agreedPrice não vierem, calcula a partir da comitiva/preços.
-export function enrollClient(
+export async function enrollClient(
   exp: Expedition,
   client: Client,
   opts: {
@@ -100,7 +100,7 @@ export function enrollClient(
     agreedPrice?: number;
     observations?: string;
   } = {}
-): { enrollment?: Enrollment; error?: string } {
+): Promise<{ enrollment?: Enrollment; error?: string }> {
   if (exp.enrollments.some((e) => e.clientId === client.id && e.status !== 'cancelado')) {
     return { error: 'Cliente já está nesta expedição' };
   }
@@ -124,7 +124,7 @@ export function enrollClient(
     updatedAt: now,
   };
   exp.enrollments.push(enrollment);
-  expeditionsStore.touch(exp.id);
+  await expeditionsStore.touch(exp.id);
   return { enrollment };
 }
 
@@ -206,8 +206,8 @@ export function computeFinance(
 }
 
 // Detalhe completo (expedição + fornecedores resolvidos + finanças + por-cliente)
-export function buildExpeditionDetail(exp: Expedition) {
-  const allSuppliers = suppliersStore.all();
+export async function buildExpeditionDetail(exp: Expedition) {
+  const allSuppliers = await suppliersStore.all();
   const finance = computeFinance(exp, allSuppliers);
   const suppliers = allSuppliers.filter((s) => exp.supplierIds.includes(s.id));
 

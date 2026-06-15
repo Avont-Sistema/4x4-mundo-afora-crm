@@ -8,7 +8,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const exp = expeditionsStore.get(id);
+    const exp = await expeditionsStore.get(id);
     if (!exp) {
       return NextResponse.json({ error: 'Expedição não encontrada' }, { status: 404 });
     }
@@ -26,9 +26,9 @@ export async function POST(
       amount,
       date: body.date || new Date().toISOString().split('T')[0],
     });
-    expeditionsStore.touch(exp.id);
+    await expeditionsStore.touch(exp.id);
     return NextResponse.json(
-      { expedition: buildExpeditionDetail(exp) },
+      { expedition: await buildExpeditionDetail(exp) },
       { status: 201 }
     );
   } catch (error: any) {
@@ -47,11 +47,11 @@ export async function DELETE(
   const { id } = await params;
   const { searchParams } = new URL(request.url);
   const costId = searchParams.get('costId');
-  const exp = expeditionsStore.get(id);
+  const exp = await expeditionsStore.get(id);
   if (!exp) {
     return NextResponse.json({ error: 'Expedição não encontrada' }, { status: 404 });
   }
   exp.manualCosts = exp.manualCosts.filter((c) => c.id !== costId);
-  expeditionsStore.touch(exp.id);
-  return NextResponse.json({ expedition: buildExpeditionDetail(exp) });
+  await expeditionsStore.touch(exp.id);
+  return NextResponse.json({ expedition: await buildExpeditionDetail(exp) });
 }

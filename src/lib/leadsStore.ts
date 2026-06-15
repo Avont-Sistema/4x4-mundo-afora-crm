@@ -1,5 +1,4 @@
-import fs from 'fs';
-import path from 'path';
+import { kvLoad, kvSave } from './kvStore';
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -64,14 +63,10 @@ export const LEAD_SOURCES: { key: LeadSource; label: string }[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Persistência (arquivo JSON em .data/leads.json)
-// Mantém um cache em memória e escreve no disco a cada mutação.
-// Em produção (Vercel) isto deve ser trocado por um banco real.
+// Persistência via kvStore (Supabase em produção, .data/leads.json em dev).
 // ---------------------------------------------------------------------------
 
-const DATA_DIR = path.join(process.cwd(), '.data');
-const DATA_FILE = path.join(DATA_DIR, 'leads.json');
-
+const KEY = 'leads';
 let cache: Lead[] | null = null;
 
 function nowISO() {
@@ -142,45 +137,34 @@ function seedLeads(): Lead[] {
   ];
 }
 
-function load(): Lead[] {
+async function load(): Promise<Lead[]> {
   if (cache) return cache;
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-      cache = JSON.parse(raw) as Lead[];
-      return cache;
-    }
-  } catch (err) {
-    console.error('Falha ao ler leads.json, recriando seed:', err);
+  const existing = await kvLoad<Lead[]>(KEY);
+  if (existing) {
+    cache = existing;
+    return cache;
   }
   cache = seedLeads();
-  persist();
+  await persist();
   return cache;
 }
 
-function persist() {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    fs.writeFileSync(DATA_FILE, JSON.stringify(cache ?? [], null, 2), 'utf-8');
-  } catch (err) {
-    console.error('Falha ao escrever leads.json:', err);
-  }
+async function persist() {
+  await kvSave(KEY, cache ?? []);
 }
 
 // ---------------------------------------------------------------------------
 // API do store
 // ---------------------------------------------------------------------------
 
-export function getLeads(): Lead[] {
-  return [...load()].sort(
+export async function getLeads(): Promise<Lead[]> {
+  return [...(await load())].sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   );
 }
 
-export function getLead(id: string): Lead | undefined {
-  return load().find((l) => l.id === id);
+export async function getLead(id: string): Promise<Lead | undefined> {
+  return (await load()).find((l) => l.id === id);
 }
 
 // Normaliza telefone para comparação (só dígitos)
@@ -188,19 +172,19 @@ function normalizePhone(phone?: string): string {
   return (phone || '').replace(/\D/g, '');
 }
 
-export function findLeadByPhone(phone?: string): Lead | undefined {
+export async function findLeadByPhone(phone?: string): Promise<Lead | undefined> {
   const target = normalizePhone(phone);
   if (!target) return undefined;
-  return load().find(
+  return (await load()).find(
     (l) =>
       normalizePhone(l.phone) === target || normalizePhone(l.whatsapp) === target
   );
 }
 
-export function findLeadByEmail(email?: string): Lead | undefined {
+export async function findLeadByEmail(email?: string): Promise<Lead | undefined> {
   if (!email) return undefined;
   const target = email.trim().toLowerCase();
-  return load().find((l) => (l.email || '').trim().toLowerCase() === target);
+  return (await load()).find((l) => (l.email || '').trim().toLowerCase() === target);
 }
 
 export interface CreateLeadInput {
@@ -217,8 +201,8 @@ export interface CreateLeadInput {
   lastMessage?: string;
 }
 
-export function createLead(input: CreateLeadInput): Lead {
-  const leads = load();
+export async function createLead(input: CreateLeadInput): Promise<Lead> {
+  const leads = await load();
   const ts = nowISO();
   const lead: Lead = {
     id: crypto.randomUUID(),
@@ -238,48 +222,52 @@ export function createLead(input: CreateLeadInput): Lead {
   };
   leads.push(lead);
   cache = leads;
-  persist();
+  await persist();
   return lead;
 }
 
-export function updateLead(id: string, patch: Partial<Lead>): Lead | undefined {
-  const leads = load();
+export async function updateLead(
+  id: string,
+  patch: Partial<Lead>
+): Promise<Lead | undefined> {
+  const leads = await load();
   const idx = leads.findIndex((l) => l.id === id);
   if (idx === -1) return undefined;
   const { id: _ignore, createdAt: _ignore2, ...rest } = patch;
   leads[idx] = { ...leads[idx], ...rest, updatedAt: nowISO() };
   cache = leads;
-  persist();
+  await persist();
   return leads[idx];
 }
 
-export function deleteLead(id: string): boolean {
-  const leads = load();
+export async function deleteLead(id: string): Promise<boolean> {
+  const leads = await load();
   const next = leads.filter((l) => l.id !== id);
   if (next.length === leads.length) return false;
   cache = next;
-  persist();
+  await persist();
   return true;
 }
 
 // Cria ou atualiza um lead a partir de um contato (usado pelo bot do WhatsApp
 // e pelos webhooks de anúncios). Faz deduplicação por telefone/email.
-export function upsertLeadFromContact(input: CreateLeadInput): {
+export async function upsertLeadFromContact(input: CreateLeadInput): Promise<{
   lead: Lead;
   created: boolean;
-} {
-  const existing = findLeadByPhone(input.phone || input.whatsapp) ||
-    findLeadByEmail(input.email);
+}> {
+  const existing =
+    (await findLeadByPhone(input.phone || input.whatsapp)) ||
+    (await findLeadByEmail(input.email));
 
   if (existing) {
     const patch: Partial<Lead> = { lastMessage: input.lastMessage };
     // completa dados que faltavam
     if (!existing.email && input.email) patch.email = input.email;
     if (!existing.interest && input.interest) patch.interest = input.interest;
-    const lead = updateLead(existing.id, patch)!;
+    const lead = (await updateLead(existing.id, patch))!;
     return { lead, created: false };
   }
 
-  const lead = createLead(input);
+  const lead = await createLead(input);
   return { lead, created: true };
 }

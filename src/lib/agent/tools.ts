@@ -126,9 +126,9 @@ export const TOOLS = [
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-function findExpeditionByName(nome: string): Expedition | undefined {
+async function findExpeditionByName(nome: string): Promise<Expedition | undefined> {
   const q = (nome || '').toLowerCase();
-  const all = expeditionsStore.all();
+  const all = await expeditionsStore.all();
   return (
     all.find((e) => e.routeName.toLowerCase() === q) ||
     all.find((e) => e.routeName.toLowerCase().includes(q)) ||
@@ -136,15 +136,13 @@ function findExpeditionByName(nome: string): Expedition | undefined {
   );
 }
 
-function clientByPhone(phone: string) {
+async function clientByPhone(phone: string) {
   const n = (phone || '').replace(/\D/g, '');
-  return clientsStore
-    .all()
-    .find(
-      (c) =>
-        (c.phone || '').replace(/\D/g, '') === n ||
-        (c.whatsapp || '').replace(/\D/g, '') === n
-    );
+  return (await clientsStore.all()).find(
+    (c) =>
+      (c.phone || '').replace(/\D/g, '') === n ||
+      (c.whatsapp || '').replace(/\D/g, '') === n
+  );
 }
 
 // ── Execução ────────────────────────────────────────────────────────────────
@@ -155,11 +153,12 @@ export async function executeTool(
 ): Promise<any> {
   switch (name) {
     case 'consultar_expedicoes': {
-      const open = expeditionsStore
-        .all()
-        .filter((e) => e.status === 'aberta' || e.status === 'em_andamento')
-        .map((e) => {
-          const d = buildExpeditionDetail(e);
+      const ativas = (await expeditionsStore.all()).filter(
+        (e) => e.status === 'aberta' || e.status === 'em_andamento'
+      );
+      const open = await Promise.all(
+        ativas.map(async (e) => {
+          const d = await buildExpeditionDetail(e);
           return {
             nome: e.routeName,
             local: e.location,
@@ -169,14 +168,15 @@ export async function executeTool(
             preco_adulto: e.pricePerPerson,
             preco_crianca: e.pricePerChild,
           };
-        });
+        })
+      );
       return { total: open.length, expedicoes: open };
     }
 
     case 'consultar_expedicao': {
-      const exp = findExpeditionByName(input.nome);
+      const exp = await findExpeditionByName(input.nome);
       if (!exp) return { encontrada: false, mensagem: 'Expedição não encontrada.' };
-      const d = buildExpeditionDetail(exp);
+      const d = await buildExpeditionDetail(exp);
       return {
         encontrada: true,
         nome: exp.routeName,
@@ -191,8 +191,8 @@ export async function executeTool(
     }
 
     case 'consultar_cliente': {
-      const lead = findLeadByPhone(phone);
-      const client = clientByPhone(phone);
+      const lead = await findLeadByPhone(phone);
+      const client = await clientByPhone(phone);
       return {
         e_lead: !!lead,
         e_cliente: !!client,
@@ -202,7 +202,7 @@ export async function executeTool(
     }
 
     case 'registrar_lead': {
-      const { lead, created } = upsertLeadFromContact({
+      const { lead, created } = await upsertLeadFromContact({
         name: input.nome,
         phone,
         whatsapp: phone,
@@ -217,12 +217,12 @@ export async function executeTool(
     }
 
     case 'gerar_link_pagamento': {
-      const exp = findExpeditionByName(input.expedicao);
+      const exp = await findExpeditionByName(input.expedicao);
       if (!exp) return { sucesso: false, mensagem: 'Expedição não encontrada.' };
       const adultos = Number(input.adultos) || 1;
       const criancas = Number(input.criancas) || 0;
       const valor = adultos * exp.pricePerPerson + criancas * exp.pricePerChild;
-      const client = clientByPhone(phone);
+      const client = await clientByPhone(phone);
       const charge = await createCharge({
         clientName: input.nome || client?.name || 'Cliente',
         phone,
@@ -249,10 +249,10 @@ export async function executeTool(
     }
 
     case 'cadastrar_cliente': {
-      let client = clientByPhone(phone);
+      let client = await clientByPhone(phone);
       let novo = false;
       if (!client) {
-        client = clientsStore.create({
+        client = await clientsStore.create({
           name: input.nome,
           email: input.email,
           phone,
@@ -264,17 +264,17 @@ export async function executeTool(
         novo = true;
       }
       // converte o lead
-      const lead = findLeadByPhone(phone);
-      if (lead) upsertLeadFromContact({ name: client.name, phone, source: 'whatsapp', stage: 'finalizado' });
+      const lead = await findLeadByPhone(phone);
+      if (lead) await upsertLeadFromContact({ name: client.name, phone, source: 'whatsapp', stage: 'finalizado' });
       return { sucesso: true, novo, cliente_id: client.id };
     }
 
     case 'matricular_cliente': {
-      const exp = findExpeditionByName(input.expedicao);
+      const exp = await findExpeditionByName(input.expedicao);
       if (!exp) return { sucesso: false, mensagem: 'Expedição não encontrada.' };
-      let client = clientByPhone(phone);
+      let client = await clientByPhone(phone);
       if (!client) {
-        client = clientsStore.create({
+        client = await clientsStore.create({
           name: input.nome || phone,
           phone,
           whatsapp: phone,
@@ -302,14 +302,14 @@ export async function executeTool(
         updatedAt: new Date().toISOString(),
       };
       exp.enrollments.push(enr);
-      expeditionsStore.touch(exp.id);
+      await expeditionsStore.touch(exp.id);
       return { sucesso: true, matricula_id: enr.id, valor: enr.agreedPrice };
     }
 
     case 'registrar_pagamento': {
-      const exp = findExpeditionByName(input.expedicao);
+      const exp = await findExpeditionByName(input.expedicao);
       if (!exp) return { sucesso: false, mensagem: 'Expedição não encontrada.' };
-      const client = clientByPhone(phone);
+      const client = await clientByPhone(phone);
       const enr = exp.enrollments.find(
         (e) => client && e.clientId === client.id && e.status !== 'cancelado'
       );
@@ -323,7 +323,7 @@ export async function executeTool(
       });
       enr.status = 'confirmado';
       enr.updatedAt = new Date().toISOString();
-      expeditionsStore.touch(exp.id);
+      await expeditionsStore.touch(exp.id);
       return { sucesso: true };
     }
 

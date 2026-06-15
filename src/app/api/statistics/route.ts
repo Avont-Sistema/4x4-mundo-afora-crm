@@ -2,5 +2,5 @@ import { NextResponse } from 'next/server';
 import { buildStatistics } from '@/lib/statistics';
 
 export async function GET() {
-  return NextResponse.json(buildStatistics());
+  return NextResponse.json(await buildStatistics());
 }

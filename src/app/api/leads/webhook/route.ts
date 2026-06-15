@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { lead, created } = upsertLeadFromContact({
+    const { lead, created } = await upsertLeadFromContact({
       name: data.name || data.email || data.phone || 'Lead',
       email: data.email,
       phone: data.phone,

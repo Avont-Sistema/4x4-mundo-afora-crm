@@ -32,11 +32,11 @@ export interface Activity {
   text: string;
 }
 
-export function buildClientDetail(id: string) {
-  const client = clientsStore.get(id);
+export async function buildClientDetail(id: string) {
+  const client = await clientsStore.get(id);
   if (!client) return null;
 
-  const expeditions = expeditionsStore.all();
+  const expeditions = await expeditionsStore.all();
   const clientExpeditions: ClientExpedition[] = [];
   const payments: ClientPayment[] = [];
   const activities: Activity[] = [];
@@ -92,7 +92,7 @@ export function buildClientDetail(id: string) {
   activities.push({ date: client.createdAt, type: 'cadastro', text: 'Cliente cadastrado' });
 
   // lead vinculado (origem / última mensagem)
-  const lead = findLeadByPhone(client.phone || client.whatsapp);
+  const lead = await findLeadByPhone(client.phone || client.whatsapp);
   if (lead?.lastMessage) {
     activities.push({
       date: lead.updatedAt,

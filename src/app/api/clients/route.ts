@@ -4,7 +4,7 @@ import { clientsStore, type FamilyMember } from '@/lib/clientsStore';
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get('q')?.toLowerCase();
-  let clients = clientsStore.all();
+  let clients = await clientsStore.all();
   if (q) {
     clients = clients.filter(
       (c) =>
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     if (!body.name) {
       return NextResponse.json({ error: 'Nome é obrigatório' }, { status: 400 });
     }
-    const client = clientsStore.create({
+    const client = await clientsStore.create({
       name: body.name,
       email: body.email,
       phone: body.phone,

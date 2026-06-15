@@ -7,7 +7,8 @@ import {
 
 export async function GET() {
   // lista com finanças resumidas de cada expedição
-  const expeditions = expeditionsStore.all().map((e) => buildExpeditionDetail(e));
+  const all = await expeditionsStore.all();
+  const expeditions = await Promise.all(all.map((e) => buildExpeditionDetail(e)));
   return NextResponse.json({ expeditions });
 }
 
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    const expedition = expeditionsStore.create({
+    const expedition = await expeditionsStore.create({
       routeName: body.routeName,
       sector: body.sector,
       description: body.description,
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
       enrollments: [],
     });
     return NextResponse.json(
-      { expedition: buildExpeditionDetail(expedition) },
+      { expedition: await buildExpeditionDetail(expedition) },
       { status: 201 }
     );
   } catch (error: any) {

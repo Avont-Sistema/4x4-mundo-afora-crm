@@ -48,7 +48,7 @@ export async function runAgent(
 ): Promise<{ reply: string; usedTools: string[] }> {
   const client = getClient();
   if (!client) {
-    return { reply: fallbackReply(history[history.length - 1]?.content || ''), usedTools: [] };
+    return { reply: await fallbackReply(history[history.length - 1]?.content || ''), usedTools: [] };
   }
 
   const system = masterPrompt(operatorNotes);
@@ -93,27 +93,29 @@ export async function runAgent(
     // Chave inválida / API fora do ar / etc → não derruba o atendimento
     console.error('[agent] erro na IA, usando fallback:', err?.message);
     return {
-      reply: fallbackReply(history[history.length - 1]?.content || ''),
+      reply: await fallbackReply(history[history.length - 1]?.content || ''),
       usedTools,
     };
   }
 }
 
 // ── Fallback sem IA (mantém o sistema funcional sem ANTHROPIC_API_KEY) ──────
-function fallbackReply(message: string): string {
+async function fallbackReply(message: string): Promise<string> {
   const m = message.toLowerCase();
 
   if (m.includes('preç') || m.includes('valor') || m.includes('quanto') || m.includes('expedi') || m.includes('próxim') || m.includes('proxim') || m.includes('disponí')) {
-    const open = expeditionsStore
-      .all()
-      .filter((e) => e.status === 'aberta' || e.status === 'em_andamento');
+    const open = (await expeditionsStore.all()).filter(
+      (e) => e.status === 'aberta' || e.status === 'em_andamento'
+    );
     if (open.length === 0) {
       return 'No momento estou organizando as próximas saídas. Me deixa seu nome que assim que abrir eu te aviso? 😊';
     }
-    const lines = open.map((e) => {
-      const d = buildExpeditionDetail(e);
-      return `• ${e.routeName} — R$ ${e.pricePerPerson.toLocaleString('pt-BR')} por pessoa (${d.finance.slotsAvailable} vagas)`;
-    });
+    const lines = await Promise.all(
+      open.map(async (e) => {
+        const d = await buildExpeditionDetail(e);
+        return `• ${e.routeName} — R$ ${e.pricePerPerson.toLocaleString('pt-BR')} por pessoa (${d.finance.slotsAvailable} vagas)`;
+      })
+    );
     return `Temos estas expedições abertas:\n${lines.join('\n')}\n\nQual delas te interessa? Posso já reservar sua vaga.`;
   }
 

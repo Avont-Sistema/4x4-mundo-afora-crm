@@ -8,7 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const detail = buildClientDetail(id);
+  const detail = await buildClientDetail(id);
   if (!detail) {
     return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
   }
@@ -38,7 +38,7 @@ export async function PATCH(
         shirtSize: m.shirtSize,
       }));
     }
-    const client = clientsStore.update(id, patch);
+    const client = await clientsStore.update(id, patch);
     if (!client) {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
     }
@@ -56,7 +56,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const ok = clientsStore.remove(id);
+  const ok = await clientsStore.remove(id);
   if (!ok) {
     return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
   }

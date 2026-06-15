@@ -14,7 +14,7 @@ export async function PATCH(
       patch.paidAt = new Date().toISOString().split('T')[0];
     }
     if (patch.status === 'pendente') patch.paidAt = undefined;
-    const payable = payablesStore.update(id, patch);
+    const payable = await payablesStore.update(id, patch);
     if (!payable) {
       return NextResponse.json({ error: 'Conta não encontrada' }, { status: 404 });
     }
@@ -32,7 +32,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const ok = payablesStore.remove(id);
+  const ok = await payablesStore.remove(id);
   if (!ok) {
     return NextResponse.json({ error: 'Conta não encontrada' }, { status: 404 });
   }

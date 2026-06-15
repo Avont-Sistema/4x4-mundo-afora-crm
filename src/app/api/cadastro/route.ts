@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const expId = searchParams.get('exp');
   if (!expId) return NextResponse.json({ expedition: null });
-  const exp = expeditionsStore.get(expId);
+  const exp = await expeditionsStore.get(expId);
   if (!exp) return NextResponse.json({ expedition: null });
   return NextResponse.json({
     expedition: {
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
       notes: body.notes || undefined,
     };
 
-    const existing = findClientByIdentity({
+    const existing = await findClientByIdentity({
       cpf: incoming.cpf,
       email: incoming.email,
       phone: incoming.phone,
@@ -124,9 +124,9 @@ export async function POST(request: NextRequest) {
         petInfo: fill(existing.petInfo, incoming.petInfo),
         family,
       };
-      client = clientsStore.update(existing.id, patch)!;
+      client = (await clientsStore.update(existing.id, patch))!;
     } else {
-      client = clientsStore.create({
+      client = await clientsStore.create({
         name: incoming.name,
         email: incoming.email,
         phone: incoming.phone,
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
     let alreadyEnrolled = false;
     let expeditionName: string | undefined;
     if (body.expeditionId) {
-      const exp = expeditionsStore.get(body.expeditionId);
+      const exp = await expeditionsStore.get(body.expeditionId);
       if (exp) {
         expeditionName = exp.routeName;
         // comitiva desta inscrição (não usa a família acumulada de outras expedições)
@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
         ]
           .filter(Boolean)
           .join('\n');
-        const result = enrollClient(exp, client, { adults, children, observations: obs });
+        const result = await enrollClient(exp, client, { adults, children, observations: obs });
         if (result.enrollment) enrolled = true;
         else if (result.error) alreadyEnrolled = true;
       }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { payablesStore, type PayableType } from '@/lib/payablesStore';
 
 export async function GET() {
-  return NextResponse.json({ payables: payablesStore.all() });
+  return NextResponse.json({ payables: await payablesStore.all() });
 }
 
 export async function POST(request: NextRequest) {
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    const payable = payablesStore.create({
+    const payable = await payablesStore.create({
       description: body.description,
       amount: Number(body.amount),
       type: (body.type as PayableType) || 'despesa',

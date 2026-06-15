@@ -71,11 +71,11 @@ function monthKey(dateStr?: string): string | null {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-export function buildFinanceSummary(opts: { month?: string } = {}) {
+export async function buildFinanceSummary(opts: { month?: string } = {}) {
   const { month } = opts; // "YYYY-MM" or undefined for all-time
-  const allExpeditions = expeditionsStore.all();
-  const suppliers = suppliersStore.all();
-  const allPayables = payablesStore.all();
+  const allExpeditions = await expeditionsStore.all();
+  const suppliers = await suppliersStore.all();
+  const allPayables = await payablesStore.all();
   const today = new Date();
 
   // When month is provided, scope to expeditions starting in that month

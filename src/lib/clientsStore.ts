@@ -127,15 +127,15 @@ export function digits(s?: string): string {
 
 // Encontra um cliente já existente pela identidade (prioridade: CPF > email > telefone).
 // Usado pelo formulário público para "anexar" dados a um cliente que já temos.
-export function findClientByIdentity(opts: {
+export async function findClientByIdentity(opts: {
   cpf?: string;
   email?: string;
   phone?: string;
-}): Client | undefined {
+}): Promise<Client | undefined> {
   const cpf = digits(opts.cpf);
   const email = (opts.email || '').trim().toLowerCase();
   const phone = digits(opts.phone);
-  const all = clientsStore.all();
+  const all = await clientsStore.all();
 
   if (cpf.length >= 11) {
     const byCpf = all.find((c) => digits(c.cpf) === cpf);

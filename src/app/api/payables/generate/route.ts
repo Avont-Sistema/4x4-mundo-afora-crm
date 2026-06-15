@@ -9,17 +9,17 @@ import { suppliersStore, supplierCost } from '@/lib/suppliersStore';
 export async function POST(request: NextRequest) {
   try {
     const { expeditionId } = await request.json();
-    const exp = expeditionsStore.get(expeditionId);
+    const exp = await expeditionsStore.get(expeditionId);
     if (!exp) {
       return NextResponse.json({ error: 'Expedição não encontrada' }, { status: 404 });
     }
-    const suppliers = suppliersStore.all();
+    const suppliers = await suppliersStore.all();
     const fin = computeFinance(exp, suppliers);
     const cars = exp.enrollments.filter((e) => e.status !== 'cancelado').length;
     const ctx = { adults: fin.totalAdults, children: fin.totalChildren, cars, rooms: cars };
-    const existing = payablesStore
-      .all()
-      .filter((p) => p.expeditionId === exp.id && p.supplierId);
+    const existing = (await payablesStore.all()).filter(
+      (p) => p.expeditionId === exp.id && p.supplierId
+    );
 
     let created = 0;
     for (const s of suppliers) {
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       if (existing.some((p) => p.supplierId === s.id)) continue; // já gerado
       const amount = supplierCost(s, ctx);
       if (amount <= 0) continue;
-      payablesStore.create({
+      await payablesStore.create({
         description: `${s.name} — ${exp.routeName}`,
         amount,
         type: 'fornecedor',
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       created++;
     }
 
-    return NextResponse.json({ created, payables: payablesStore.all() });
+    return NextResponse.json({ created, payables: await payablesStore.all() });
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message || 'Falha ao gerar contas' },

@@ -9,18 +9,18 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const exp = expeditionsStore.get(id);
+    const exp = await expeditionsStore.get(id);
     if (!exp) {
       return NextResponse.json({ error: 'Expedição não encontrada' }, { status: 404 });
     }
 
     const body = await request.json();
-    const client = clientsStore.get(body.clientId);
+    const client = await clientsStore.get(body.clientId);
     if (!client) {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
     }
 
-    const result = enrollClient(exp, client, {
+    const result = await enrollClient(exp, client, {
       adults: body.adults !== undefined ? Number(body.adults) : undefined,
       children: body.children !== undefined ? Number(body.children) : undefined,
       agreedPrice: body.agreedPrice !== undefined ? Number(body.agreedPrice) : undefined,
@@ -31,7 +31,7 @@ export async function POST(
     }
 
     return NextResponse.json(
-      { expedition: buildExpeditionDetail(exp) },
+      { expedition: await buildExpeditionDetail(exp) },
       { status: 201 }
     );
   } catch (error: any) {

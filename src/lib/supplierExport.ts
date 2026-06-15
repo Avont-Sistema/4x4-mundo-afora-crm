@@ -31,12 +31,12 @@ function ageFromBirth(birthDate?: string): string {
 // ---------------------------------------------------------------------------
 // Constrói as linhas (titular + acompanhantes/passageiros) de uma expedição
 // ---------------------------------------------------------------------------
-export function buildExportRows(exp: Expedition): PersonRow[] {
+export async function buildExportRows(exp: Expedition): Promise<PersonRow[]> {
   const rows: PersonRow[] = [];
   const active = exp.enrollments.filter((e) => e.status !== 'cancelado');
 
   for (const enr of active) {
-    const c = clientsStore.get(enr.clientId);
+    const c = await clientsStore.get(enr.clientId);
     if (!c) continue;
 
     const shared = {
@@ -113,16 +113,16 @@ function slug(s: string): string {
     .toLowerCase();
 }
 
-export function buildSupplierCSV(
+export async function buildSupplierCSV(
   exp: Expedition,
   supplier: Supplier
-): { csv: string; filename: string; total: number; peopleCount: number } {
+): Promise<{ csv: string; filename: string; total: number; peopleCount: number }> {
   const fieldIds = (supplier.exportFields?.length ? supplier.exportFields : DEFAULT_EXPORT_FIELDS) as (keyof PersonRow)[];
   const cols = fieldIds
     .map((id) => EXPORT_FIELDS.find((f) => f.id === id))
     .filter((f): f is { id: keyof PersonRow; label: string } => Boolean(f));
 
-  const rows = buildExportRows(exp);
+  const rows = await buildExportRows(exp);
   const ctx = costContext(exp);
   const total = supplierCost(supplier, ctx);
 
