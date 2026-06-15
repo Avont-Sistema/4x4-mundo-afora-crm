@@ -71,11 +71,25 @@ function monthKey(dateStr?: string): string | null {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-export function buildFinanceSummary() {
-  const expeditions = expeditionsStore.all();
+export function buildFinanceSummary(opts: { month?: string } = {}) {
+  const { month } = opts; // "YYYY-MM" or undefined for all-time
+  const allExpeditions = expeditionsStore.all();
   const suppliers = suppliersStore.all();
-  const payables = payablesStore.all();
+  const allPayables = payablesStore.all();
   const today = new Date();
+
+  // When month is provided, scope to expeditions starting in that month
+  const expeditions = month
+    ? allExpeditions.filter((e) => e.startDate && monthKey(e.startDate) === month)
+    : allExpeditions;
+
+  // Payables filtered by due date month when scoped
+  const payables = month
+    ? allPayables.filter((p) => {
+        const d = p.dueDate || p.paidAt;
+        return d && monthKey(d) === month;
+      })
+    : allPayables;
 
   const receivables: Receivable[] = [];
   const income: IncomeEntry[] = [];

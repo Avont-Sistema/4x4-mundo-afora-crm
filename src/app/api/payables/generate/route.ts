@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { payablesStore } from '@/lib/payablesStore';
 import { expeditionsStore, computeFinance } from '@/lib/expeditionsStore';
-import { suppliersStore } from '@/lib/suppliersStore';
+import { suppliersStore, supplierCost } from '@/lib/suppliersStore';
 
 // Gera contas a pagar (pendentes) a partir dos fornecedores de uma expedição,
 // com base nos participantes atuais (adultos/crianças). Evita duplicar
@@ -15,6 +15,8 @@ export async function POST(request: NextRequest) {
     }
     const suppliers = suppliersStore.all();
     const fin = computeFinance(exp, suppliers);
+    const cars = exp.enrollments.filter((e) => e.status !== 'cancelado').length;
+    const ctx = { adults: fin.totalAdults, children: fin.totalChildren, cars, rooms: cars };
     const existing = payablesStore
       .all()
       .filter((p) => p.expeditionId === exp.id && p.supplierId);
@@ -23,8 +25,7 @@ export async function POST(request: NextRequest) {
     for (const s of suppliers) {
       if (!exp.supplierIds.includes(s.id)) continue;
       if (existing.some((p) => p.supplierId === s.id)) continue; // já gerado
-      const amount =
-        s.costPerPerson * fin.totalAdults + s.costPerChild * fin.totalChildren;
+      const amount = supplierCost(s, ctx);
       if (amount <= 0) continue;
       payablesStore.create({
         description: `${s.name} — ${exp.routeName}`,

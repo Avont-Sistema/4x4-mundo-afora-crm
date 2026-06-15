@@ -15,6 +15,14 @@ import {
   Receipt,
   UserPlus,
   ChevronRight,
+  Link2,
+  Copy,
+  Check,
+  ExternalLink,
+  Lock,
+  Unlock,
+  Download,
+  FileSpreadsheet,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatBRL, formatDate } from '@/lib/format';
@@ -34,11 +42,16 @@ interface Finance {
   profitMargin: number; paymentProgress: number;
 }
 interface ManualCost { id: string; label: string; amount: number; date: string }
+interface SupplierBilling {
+  id: string; name: string; type: string; billingMode: string;
+  billingLabel: string; exportFieldCount: number; amount: number;
+}
 interface Expedition {
   id: string; routeName: string; description?: string; location?: string;
   startDate?: string; endDate?: string; slots: number; pricePerPerson: number;
-  pricePerChild: number; revenueGoal: number; status: string; supplierIds: string[];
-  suppliers: Supplier[]; manualCosts: ManualCost[]; enrollments: Enrollment[]; finance: Finance;
+  pricePerChild: number; revenueGoal: number; status: string; closedAt?: string; supplierIds: string[];
+  suppliers: Supplier[]; manualCosts: ManualCost[]; enrollments: Enrollment[];
+  finance: Finance; supplierBilling: SupplierBilling[];
 }
 interface ClientLite { id: string; name: string; phone?: string }
 
@@ -48,13 +61,29 @@ const enrollmentStatusColor: Record<string, string> = {
   cancelado: 'bg-rose-100 text-rose-700',
 };
 
+const expStatusColor: Record<string, string> = {
+  planejamento: 'bg-gray-100 text-gray-700',
+  aberta: 'bg-blue-100 text-blue-700',
+  em_andamento: 'bg-amber-100 text-amber-700',
+  fechada: 'bg-emerald-100 text-emerald-700',
+  finalizada: 'bg-purple-100 text-purple-700',
+};
+const expStatusLabel: Record<string, string> = {
+  planejamento: 'Planejamento',
+  aberta: 'Aberta',
+  em_andamento: 'Em Andamento',
+  fechada: 'Fechada',
+  finalizada: 'Finalizada',
+};
+
 export default function ExpeditionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [exp, setExp] = useState<Expedition | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'clientes' | 'fornecedores' | 'custos'>('clientes');
+  const [tab, setTab] = useState<'clientes' | 'fornecedores' | 'custos' | 'fechamento'>('clientes');
   const [selectedEnrollment, setSelectedEnrollment] = useState<string | null>(null);
+  const [showLink, setShowLink] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -100,13 +129,24 @@ export default function ExpeditionDetailPage() {
 
       <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold">{exp.routeName}</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-3xl font-bold">{exp.routeName}</h1>
+            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${expStatusColor[exp.status] || expStatusColor.planejamento}`}>
+              {expStatusLabel[exp.status] || exp.status}
+            </span>
+          </div>
           <p className="text-gray-500 text-sm mt-1">
             {exp.location ? `${exp.location} · ` : ''}
             {formatDate(exp.startDate)} – {formatDate(exp.endDate)} ·{' '}
             {f.totalParticipants}/{exp.slots} vagas
           </p>
         </div>
+        <button
+          onClick={() => setShowLink(true)}
+          className="btn btn-secondary flex items-center gap-2"
+        >
+          <Link2 size={16} /> Link de Formulário
+        </button>
       </div>
 
       {/* cabeçalho financeiro */}
@@ -161,6 +201,7 @@ export default function ExpeditionDetailPage() {
           { k: 'clientes', label: `Clientes (${exp.enrollments.length})`, icon: Users },
           { k: 'fornecedores', label: `Fornecedores (${exp.suppliers.length})`, icon: Truck },
           { k: 'custos', label: `Custos Avulsos (${exp.manualCosts.length})`, icon: Receipt },
+          { k: 'fechamento', label: 'Fechamento', icon: FileSpreadsheet },
         ].map((t) => (
           <button
             key={t.k}
@@ -181,6 +222,7 @@ export default function ExpeditionDetailPage() {
       )}
       {tab === 'fornecedores' && <SuppliersTab exp={exp} onApply={apply} />}
       {tab === 'custos' && <CostsTab exp={exp} onApply={apply} />}
+      {tab === 'fechamento' && <FechamentoTab exp={exp} onApply={apply} />}
 
       {/* Drawer financeiro do cliente */}
       {selected && (
@@ -191,7 +233,66 @@ export default function ExpeditionDetailPage() {
           onApply={apply}
         />
       )}
+
+      {/* Modal: link do formulário de inscrição desta expedição */}
+      {showLink && <FormLinkModal expId={exp.id} expName={exp.routeName} onClose={() => setShowLink(false)} />}
     </div>
+  );
+}
+
+// ===========================================================================
+// Modal: Link de Formulário (específico da expedição)
+// ===========================================================================
+function FormLinkModal({ expId, expName, onClose }: { expId: string; expName: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const url = typeof window !== 'undefined' ? `${window.location.origin}/cadastro?exp=${expId}` : '';
+  const whatsappText = encodeURIComponent(
+    `Olá! Para confirmar sua participação na expedição "${expName}", preencha o formulário de inscrição: ${url}`
+  );
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      toast.success('Link copiado!');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('Não foi possível copiar');
+    }
+  };
+
+  return (
+    <ModalShell title="Link de Formulário da Expedição" onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-sm text-gray-500">
+          Compartilhe este link com os clientes. Tudo que eles preencherem entra automaticamente
+          como cliente <strong>e já é matriculado nesta expedição</strong>. Se o cliente já existir
+          (mesmo CPF, e-mail ou telefone), os dados são anexados ao cadastro dele.
+        </p>
+
+        <div className="flex gap-2">
+          <input className="input flex-1 bg-gray-50 text-sm" readOnly value={url} onFocus={(e) => e.target.select()} />
+          <button onClick={copy} className="btn btn-primary flex items-center gap-2 flex-shrink-0">
+            {copied ? <Check size={16} /> : <Copy size={16} />}
+            {copied ? 'Copiado' : 'Copiar'}
+          </button>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <a href={url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary flex items-center gap-2 text-sm">
+            <ExternalLink size={15} /> Abrir formulário
+          </a>
+          <a
+            href={`https://wa.me/?text=${whatsappText}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn flex items-center gap-2 text-sm bg-green-500 text-white hover:bg-green-600"
+          >
+            <ExternalLink size={15} /> Enviar por WhatsApp
+          </a>
+        </div>
+      </div>
+    </ModalShell>
   );
 }
 
@@ -524,6 +625,154 @@ function CostsTab({ exp, onApply }: { exp: Expedition; onApply: (d: any) => void
             Nenhum custo avulso. Os custos de fornecedores são calculados automaticamente.
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ===========================================================================
+// Aba FECHAMENTO (fechar expedição + planilhas e contas a pagar por fornecedor)
+// ===========================================================================
+function FechamentoTab({ exp, onApply }: { exp: Expedition; onApply: (d: any) => void }) {
+  const [closing, setClosing] = useState(false);
+  const isClosed = exp.status === 'fechada';
+  const billing = exp.supplierBilling || [];
+  const grandTotal = billing.reduce((a, b) => a + b.amount, 0);
+
+  const download = (supplierId: string) => {
+    const a = document.createElement('a');
+    a.href = `/api/expeditions/${exp.id}/export?supplierId=${supplierId}`;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+  const downloadAll = () => billing.forEach((b, i) => setTimeout(() => download(b.id), i * 400));
+
+  const close = async () => {
+    if (
+      !confirm(
+        'Fechar a expedição? Serão geradas as contas a pagar de cada fornecedor e as planilhas ficam disponíveis para download.'
+      )
+    )
+      return;
+    setClosing(true);
+    try {
+      const res = await fetch(`/api/expeditions/${exp.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'fechada', closedAt: new Date().toISOString().split('T')[0] }),
+      });
+      const gen = await fetch('/api/payables/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expeditionId: exp.id }),
+      });
+      const genData = await gen.json();
+      onApply(await res.json());
+      toast.success(`Expedição fechada! ${genData.created || 0} conta(s) a pagar gerada(s).`);
+    } catch {
+      toast.error('Erro ao fechar expedição');
+    } finally {
+      setClosing(false);
+    }
+  };
+
+  const reopen = async () => {
+    const res = await fetch(`/api/expeditions/${exp.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'em_andamento' }),
+    });
+    onApply(await res.json());
+    toast.success('Expedição reaberta');
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* painel de status / fechar */}
+      <div
+        className={`card flex flex-wrap items-center justify-between gap-4 ${
+          isClosed ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          {isClosed ? (
+            <Lock className="text-emerald-600" size={22} />
+          ) : (
+            <Unlock className="text-amber-600" size={22} />
+          )}
+          <div>
+            <p className="font-bold">{isClosed ? 'Expedição fechada' : 'Expedição em andamento'}</p>
+            <p className="text-xs text-gray-500">
+              {isClosed
+                ? `Fechada em ${formatDate(exp.closedAt)} · planilhas e contas a pagar geradas`
+                : 'Cadastre os clientes e, quando lotar as vagas (ou quando quiser), feche a expedição.'}
+            </p>
+          </div>
+        </div>
+        {isClosed ? (
+          <button onClick={reopen} className="btn btn-secondary flex items-center gap-2">
+            <Unlock size={16} /> Reabrir
+          </button>
+        ) : (
+          <button
+            onClick={close}
+            disabled={closing}
+            className="btn flex items-center gap-2 bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+          >
+            <Lock size={16} /> {closing ? 'Fechando...' : 'Fechar Expedição'}
+          </button>
+        )}
+      </div>
+
+      {/* planilhas + total a pagar por fornecedor */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-bold flex items-center gap-2">
+            <FileSpreadsheet size={18} /> Planilhas por fornecedor
+          </h3>
+          {billing.length > 0 && (
+            <button onClick={downloadAll} className="btn btn-secondary text-sm flex items-center gap-2">
+              <Download size={15} /> Baixar todas
+            </button>
+          )}
+        </div>
+        {billing.length === 0 ? (
+          <p className="text-sm text-gray-400">
+            Nenhum fornecedor incluído nesta expedição. Adicione na aba <strong>Fornecedores</strong>.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {billing.map((b) => (
+              <div
+                key={b.id}
+                className="flex flex-wrap items-center justify-between gap-3 bg-gray-50 rounded-lg p-3"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium">{b.name}</p>
+                  <p className="text-xs text-gray-500">
+                    {b.billingLabel} · {b.exportFieldCount} coluna(s) configurada(s)
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-rose-600">{formatBRL(b.amount)}</span>
+                  <button onClick={() => download(b.id)} className="btn btn-secondary text-sm flex items-center gap-2">
+                    <Download size={15} /> Planilha
+                  </button>
+                </div>
+              </div>
+            ))}
+            <div className="flex items-center justify-between pt-3 border-t border-gray-200 mt-2">
+              <span className="font-bold">Total a pagar (fornecedores)</span>
+              <span className="font-bold text-rose-600 text-lg">{formatBRL(grandTotal)}</span>
+            </div>
+          </div>
+        )}
+        <p className="text-xs text-gray-400 mt-3">
+          As planilhas (CSV) trazem uma pessoa por linha (titular + acompanhantes/passageiros) com as
+          colunas configuradas no cadastro de cada fornecedor, mais o total a pagar.
+        </p>
       </div>
     </div>
   );

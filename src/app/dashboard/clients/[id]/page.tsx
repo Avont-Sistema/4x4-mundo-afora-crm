@@ -17,6 +17,7 @@ import {
   Wallet,
   Activity as ActivityIcon,
   User,
+  Phone,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatBRL, formatDate } from '@/lib/format';
@@ -159,6 +160,8 @@ export default function ClientDetailPage() {
           <Field label="Altura" value={c.height ? `${c.height} cm` : '—'} />
           <Field label="CPF" value={c.cpf || '—'} />
           <Field label="Email" value={c.email || '—'} />
+          {c.shirtSizes?.length > 0 && <Field label="Camisetas" value={c.shirtSizes.join(', ')} />}
+          {c.origin === 'formulario' && <Field label="Origem" value="Formulário online" />}
         </div>
 
         {c.family?.length > 0 && (
@@ -187,11 +190,25 @@ export default function ClientDetailPage() {
       {/* Seções em accordion */}
       <Section icon={<MapPin size={16} />} title="Endereço">
         <div className="grid md:grid-cols-3 gap-3 text-sm">
-          <Field label="Endereço" value={c.address || '—'} />
+          <Field label="Rua" value={[c.address, c.addressNumber].filter(Boolean).join(', ') || '—'} />
+          <Field label="Bairro" value={c.neighborhood || '—'} />
+          <Field label="CEP" value={c.cep || '—'} />
           <Field label="Cidade" value={c.city || '—'} />
           <Field label="Estado" value={c.state || '—'} />
         </div>
       </Section>
+
+      {(c.emergencyContact?.name || c.petInfo || c.roomConfig) && (
+        <Section icon={<Phone size={16} />} title="Extras">
+          <div className="grid md:grid-cols-2 gap-3 text-sm">
+            {c.emergencyContact?.name && (
+              <Field label="Emergência" value={`${c.emergencyContact.name}${c.emergencyContact.phone ? ` · ${c.emergencyContact.phone}` : ''}`} />
+            )}
+            {c.petInfo && <Field label="Pet" value={c.petInfo} />}
+            {c.roomConfig && <Field label="Quarto" value={c.roomConfig} />}
+          </div>
+        </Section>
+      )}
 
       <Section icon={<Briefcase size={16} />} title="Profissão">
         <div className="grid md:grid-cols-2 gap-3 text-sm">

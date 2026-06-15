@@ -31,9 +31,11 @@ export async function PATCH(
         relation: m.relation || 'outro',
         birthDate: m.birthDate,
         document: m.document,
+        job: m.job,
         isChild: Boolean(m.isChild),
         weight: m.weight ? Number(m.weight) : undefined,
         height: m.height ? Number(m.height) : undefined,
+        shirtSize: m.shirtSize,
       }));
     }
     const client = clientsStore.update(id, patch);

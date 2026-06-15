@@ -1,10 +1,17 @@
 import { createCollection, type BaseRecord } from './jsonCollection';
-import { suppliersStore, type Supplier } from './suppliersStore';
+import {
+  suppliersStore,
+  supplierCost as calcSupplierCost,
+  BILLING_LABELS,
+  type Supplier,
+} from './suppliersStore';
+import { countParty, type Client } from './clientsStore';
 
 export type ExpeditionStatus =
   | 'planejamento'
   | 'aberta'
   | 'em_andamento'
+  | 'fechada'
   | 'finalizada';
 
 export type EnrollmentStatus = 'reservado' | 'confirmado' | 'cancelado';
@@ -50,6 +57,7 @@ export interface Expedition extends BaseRecord {
   pricePerChild: number; // preço por criança
   revenueGoal: number; // meta de faturamento total (manual)
   status: ExpeditionStatus;
+  closedAt?: string; // data de fechamento da expedição
   supplierIds: string[]; // fornecedores configurados no projeto
   manualCosts: ManualCost[]; // custos avulsos
   enrollments: Enrollment[]; // clientes do projeto
@@ -80,6 +88,45 @@ function seed(): Expedition[] {
 }
 
 export const expeditionsStore = createCollection<Expedition>('expeditions', seed);
+
+// Matricula um cliente numa expedição (reutilizado pela API e pelo formulário público).
+// Se adults/children/agreedPrice não vierem, calcula a partir da comitiva/preços.
+export function enrollClient(
+  exp: Expedition,
+  client: Client,
+  opts: {
+    adults?: number;
+    children?: number;
+    agreedPrice?: number;
+    observations?: string;
+  } = {}
+): { enrollment?: Enrollment; error?: string } {
+  if (exp.enrollments.some((e) => e.clientId === client.id && e.status !== 'cancelado')) {
+    return { error: 'Cliente já está nesta expedição' };
+  }
+  const party = countParty(client);
+  const adults = opts.adults ?? party.adults;
+  const children = opts.children ?? party.children;
+  const agreedPrice =
+    opts.agreedPrice ?? adults * exp.pricePerPerson + children * exp.pricePerChild;
+  const now = new Date().toISOString();
+  const enrollment: Enrollment = {
+    id: crypto.randomUUID(),
+    clientId: client.id,
+    clientName: client.name,
+    adults,
+    children,
+    agreedPrice,
+    payments: [],
+    observations: opts.observations || '',
+    status: 'reservado',
+    createdAt: now,
+    updatedAt: now,
+  };
+  exp.enrollments.push(enrollment);
+  expeditionsStore.touch(exp.id);
+  return { enrollment };
+}
 
 // ---------------------------------------------------------------------------
 // Cálculos financeiros do projeto
@@ -128,11 +175,10 @@ export function computeFinance(
   const revenueBase =
     contractedRevenue > 0 ? contractedRevenue : exp.revenueGoal;
 
+  const cars = active.length;
+  const ctx = { adults: totalAdults, children: totalChildren, cars, rooms: cars };
   const used = suppliers.filter((s) => exp.supplierIds.includes(s.id));
-  const supplierCost = used.reduce(
-    (a, s) => a + s.costPerPerson * totalAdults + s.costPerChild * totalChildren,
-    0
-  );
+  const supplierCost = used.reduce((a, s) => a + calcSupplierCost(s, ctx), 0);
   const manualCostTotal = exp.manualCosts.reduce((a, c) => a + c.amount, 0);
   const totalCost = supplierCost + manualCostTotal;
 
@@ -175,5 +221,23 @@ export function buildExpeditionDetail(exp: Expedition) {
     };
   });
 
-  return { ...exp, suppliers, finance, enrollments };
+  // quanto se deve a cada fornecedor do projeto (conforme a regra de pagamento dele)
+  const cars = exp.enrollments.filter((e) => e.status !== 'cancelado').length;
+  const ctx = {
+    adults: finance.totalAdults,
+    children: finance.totalChildren,
+    cars,
+    rooms: cars,
+  };
+  const supplierBilling = suppliers.map((s) => ({
+    id: s.id,
+    name: s.name,
+    type: s.type,
+    billingMode: s.billingMode || 'per_person',
+    billingLabel: BILLING_LABELS[s.billingMode] || 'Por pessoa',
+    exportFieldCount: (s.exportFields || []).length,
+    amount: calcSupplierCost(s, ctx),
+  }));
+
+  return { ...exp, suppliers, finance, enrollments, supplierBilling };
 }

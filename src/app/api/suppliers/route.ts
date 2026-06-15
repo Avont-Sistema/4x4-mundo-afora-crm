@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { suppliersStore, type SupplierType } from '@/lib/suppliersStore';
+import { suppliersStore, type SupplierType, type BillingMode } from '@/lib/suppliersStore';
 
 export async function GET() {
   return NextResponse.json({ suppliers: suppliersStore.all() });
@@ -17,8 +17,13 @@ export async function POST(request: NextRequest) {
       email: body.email,
       phone: body.phone,
       address: body.address,
+      billingMode: (body.billingMode as BillingMode) || 'per_person',
       costPerPerson: Number(body.costPerPerson) || 0,
       costPerChild: Number(body.costPerChild) || 0,
+      costPerCar: Number(body.costPerCar) || 0,
+      costPerRoom: Number(body.costPerRoom) || 0,
+      flatFee: Number(body.flatFee) || 0,
+      exportFields: Array.isArray(body.exportFields) ? body.exportFields : [],
       rating: Number(body.rating) || 0,
       notes: body.notes,
     });

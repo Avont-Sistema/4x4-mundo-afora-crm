@@ -43,3 +43,7 @@ yarn-error.log*
 
 # OS
 Thumbs.db
+
+# Arquivos de rascunho
+Novo Documento de Texto.txt
+**/Novo Documento de Texto.txt

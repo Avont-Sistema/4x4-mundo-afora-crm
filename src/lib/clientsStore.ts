@@ -7,10 +7,12 @@ export interface FamilyMember {
   name: string;
   relation: FamilyRelation;
   birthDate?: string;
-  document?: string;
+  document?: string; // CPF
+  job?: string;
   isChild: boolean; // conta como "criança" no cálculo de custos/preço
-  weight?: number; // kg — usado em cadastros de fornecedores
+  weight?: number; // kg
   height?: number; // cm
+  shirtSize?: string;
 }
 
 export interface Vehicle {
@@ -28,16 +30,22 @@ export interface Client extends BaseRecord {
   cpf?: string;
   birthDate?: string;
   address?: string;
+  addressNumber?: string; // número e complemento
+  neighborhood?: string; // bairro
+  cep?: string;
   city?: string;
   state?: string;
-  job?: string; // emprego / profissão
-  company?: string; // empresa
-  weight?: number; // kg — dados físicos do titular
+  job?: string;
+  company?: string;
+  weight?: number; // kg
   height?: number; // cm
-  family: FamilyMember[]; // cônjuge, filhos, etc.
-  vehicle?: Vehicle; // carro
+  shirtSizes?: string[]; // tamanhos da comitiva inteira
+  roomConfig?: string;  // configuração do quarto
+  emergencyContact?: { name: string; phone: string };
+  petInfo?: string;
+  family: FamilyMember[];
+  vehicle?: Vehicle;
   notes?: string;
-  // origem (quando criado a partir de um lead / bot)
   origin?: string;
 }
 
@@ -110,4 +118,55 @@ export function countParty(client: Client): { adults: number; children: number }
     else adults++;
   }
   return { adults, children };
+}
+
+// Só dígitos (para comparar CPF / telefone independente de formatação)
+export function digits(s?: string): string {
+  return (s || '').replace(/\D/g, '');
+}
+
+// Encontra um cliente já existente pela identidade (prioridade: CPF > email > telefone).
+// Usado pelo formulário público para "anexar" dados a um cliente que já temos.
+export function findClientByIdentity(opts: {
+  cpf?: string;
+  email?: string;
+  phone?: string;
+}): Client | undefined {
+  const cpf = digits(opts.cpf);
+  const email = (opts.email || '').trim().toLowerCase();
+  const phone = digits(opts.phone);
+  const all = clientsStore.all();
+
+  if (cpf.length >= 11) {
+    const byCpf = all.find((c) => digits(c.cpf) === cpf);
+    if (byCpf) return byCpf;
+  }
+  if (email) {
+    const byEmail = all.find((c) => (c.email || '').trim().toLowerCase() === email);
+    if (byEmail) return byEmail;
+  }
+  if (phone.length >= 10) {
+    const byPhone = all.find(
+      (c) => digits(c.phone) === phone || digits(c.whatsapp) === phone
+    );
+    if (byPhone) return byPhone;
+  }
+  return undefined;
+}
+
+// Mescla membros de família evitando duplicados (compara por documento, senão por nome)
+export function mergeFamily(
+  existing: FamilyMember[],
+  incoming: FamilyMember[]
+): FamilyMember[] {
+  const result = [...existing];
+  const keyOf = (m: FamilyMember) =>
+    digits(m.document) || m.name.trim().toLowerCase();
+  for (const m of incoming) {
+    if (!m.name.trim()) continue;
+    const key = keyOf(m);
+    const dup = result.some((e) => keyOf(e) === key && key !== '');
+    if (!dup) result.push(m);
+  }
+  return result;
 }

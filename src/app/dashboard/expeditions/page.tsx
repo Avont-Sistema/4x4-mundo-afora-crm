@@ -33,13 +33,15 @@ interface Expedition {
 const statusColors: Record<string, string> = {
   planejamento: 'bg-gray-100 text-gray-700',
   aberta: 'bg-blue-100 text-blue-700',
-  em_andamento: 'bg-emerald-100 text-emerald-700',
+  em_andamento: 'bg-amber-100 text-amber-700',
+  fechada: 'bg-emerald-100 text-emerald-700',
   finalizada: 'bg-purple-100 text-purple-700',
 };
 const statusLabels: Record<string, string> = {
   planejamento: 'Planejamento',
   aberta: 'Aberta',
   em_andamento: 'Em Andamento',
+  fechada: 'Fechada',
   finalizada: 'Finalizada',
 };
 

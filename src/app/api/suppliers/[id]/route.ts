@@ -8,9 +8,9 @@ export async function PATCH(
   try {
     const { id } = await params;
     const patch = await request.json();
-    if (patch.costPerPerson !== undefined) patch.costPerPerson = Number(patch.costPerPerson);
-    if (patch.costPerChild !== undefined) patch.costPerChild = Number(patch.costPerChild);
-    if (patch.rating !== undefined) patch.rating = Number(patch.rating);
+    ['costPerPerson', 'costPerChild', 'costPerCar', 'costPerRoom', 'flatFee', 'rating'].forEach((k) => {
+      if (patch[k] !== undefined) patch[k] = Number(patch[k]);
+    });
     const supplier = suppliersStore.update(id, patch);
     if (!supplier) {
       return NextResponse.json({ error: 'Fornecedor não encontrado' }, { status: 404 });

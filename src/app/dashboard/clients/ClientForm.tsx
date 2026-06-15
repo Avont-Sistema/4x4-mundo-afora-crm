@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, UserPlus, Car, Briefcase, Users, Trash2 } from 'lucide-react';
+import { X, UserPlus, Car, Briefcase, Users, Trash2, Phone, Shirt } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface FamilyMember {
@@ -23,11 +23,17 @@ export interface ClientInitial {
   birthDate?: string;
   weight?: number | string;
   height?: number | string;
+  shirtSizes?: string[];
   address?: string;
+  addressNumber?: string;
+  neighborhood?: string;
+  cep?: string;
   city?: string;
   state?: string;
   job?: string;
   company?: string;
+  emergencyContact?: { name: string; phone: string };
+  petInfo?: string;
   family?: FamilyMember[];
   vehicle?: { model?: string; plate?: string; year?: string; color?: string };
   notes?: string;
@@ -51,11 +57,17 @@ export default function ClientForm({
     birthDate: initial?.birthDate || '',
     weight: initial?.weight ?? '',
     height: initial?.height ?? '',
+    shirtSize: initial?.shirtSizes?.[0] || '',
     address: initial?.address || '',
+    addressNumber: initial?.addressNumber || '',
+    neighborhood: initial?.neighborhood || '',
+    cep: initial?.cep || '',
     city: initial?.city || '',
     state: initial?.state || '',
     job: initial?.job || '',
     company: initial?.company || '',
+    emergencyContact: initial?.emergencyContact || { name: '', phone: '' },
+    petInfo: initial?.petInfo || '',
     family: (initial?.family || []) as FamilyMember[],
     vehicle: initial?.vehicle || { model: '', plate: '', year: '', color: '' },
     notes: initial?.notes || '',
@@ -79,7 +91,13 @@ export default function ClientForm({
       toast.error('Informe o nome');
       return;
     }
-    const payload = { ...form, whatsapp: form.phone };
+    const { shirtSize, ...rest } = form;
+    const payload = {
+      ...rest,
+      whatsapp: form.phone,
+      shirtSizes: shirtSize ? [shirtSize] : [],
+      emergencyContact: form.emergencyContact?.name ? form.emergencyContact : undefined,
+    };
     try {
       const res = await fetch(editing ? `/api/clients/${initial!.id}` : '/api/clients', {
         method: editing ? 'PATCH' : 'POST',
@@ -126,6 +144,13 @@ export default function ClientForm({
                 <label className="text-xs text-gray-500">Altura (cm)</label>
                 <input type="number" className="input" value={form.height} onChange={(e) => setForm({ ...form, height: e.target.value })} />
               </div>
+              <div>
+                <label className="text-xs text-gray-500 flex items-center gap-1"><Shirt size={11} /> Camiseta</label>
+                <select className="input" value={form.shirtSize} onChange={(e) => setForm({ ...form, shirtSize: e.target.value })}>
+                  <option value="">—</option>
+                  {['PP','P','M','G','GG','XG','XXG'].map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
             </div>
           </section>
 
@@ -133,9 +158,12 @@ export default function ClientForm({
           <section>
             <h3 className="text-sm font-bold text-gray-700 mb-3">Endereço</h3>
             <div className="grid md:grid-cols-4 gap-3">
-              <input className="input md:col-span-2" placeholder="Endereço" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+              <input className="input md:col-span-2" placeholder="Rua / Avenida" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+              <input className="input" placeholder="Número e complemento" value={form.addressNumber} onChange={(e) => setForm({ ...form, addressNumber: e.target.value })} />
+              <input className="input" placeholder="Bairro" value={form.neighborhood} onChange={(e) => setForm({ ...form, neighborhood: e.target.value })} />
               <input className="input" placeholder="Cidade" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
               <input className="input" placeholder="UF" maxLength={2} value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
+              <input className="input" placeholder="CEP" value={form.cep} onChange={(e) => setForm({ ...form, cep: e.target.value })} />
             </div>
           </section>
 
@@ -204,6 +232,18 @@ export default function ClientForm({
               <input className="input" placeholder="Ano" value={form.vehicle.year} onChange={(e) => setForm({ ...form, vehicle: { ...form.vehicle, year: e.target.value } })} />
               <input className="input md:col-span-2" placeholder="Cor" value={form.vehicle.color} onChange={(e) => setForm({ ...form, vehicle: { ...form.vehicle, color: e.target.value } })} />
             </div>
+          </section>
+
+          {/* Emergência & Pet */}
+          <section>
+            <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1">
+              <Phone size={14} /> Contato de emergência
+            </h3>
+            <div className="grid md:grid-cols-2 gap-3">
+              <input className="input" placeholder="Nome" value={form.emergencyContact.name} onChange={(e) => setForm({ ...form, emergencyContact: { ...form.emergencyContact, name: e.target.value } })} />
+              <input className="input" placeholder="Telefone" value={form.emergencyContact.phone} onChange={(e) => setForm({ ...form, emergencyContact: { ...form.emergencyContact, phone: e.target.value } })} />
+            </div>
+            <input className="input mt-3" placeholder="Pet (raça, porte, nome — opcional)" value={form.petInfo} onChange={(e) => setForm({ ...form, petInfo: e.target.value })} />
           </section>
 
           <textarea className="input h-20 w-full" placeholder="Observações gerais" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />

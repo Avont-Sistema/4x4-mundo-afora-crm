@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Plus, Edit2, Trash2, Star, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatBRL } from '@/lib/format';
+import { EXPORT_FIELDS, BILLING_LABELS, type BillingMode } from '@/lib/supplierFields';
 
 interface Supplier {
   id: string;
@@ -12,8 +13,13 @@ interface Supplier {
   email?: string;
   phone?: string;
   address?: string;
+  billingMode: BillingMode;
   costPerPerson: number;
   costPerChild: number;
+  costPerCar: number;
+  costPerRoom: number;
+  flatFee: number;
+  exportFields: string[];
   rating: number;
   notes?: string;
 }
@@ -33,8 +39,13 @@ const emptyForm = {
   email: '',
   phone: '',
   address: '',
+  billingMode: 'per_person' as BillingMode,
   costPerPerson: 0,
   costPerChild: 0,
+  costPerCar: 0,
+  costPerRoom: 0,
+  flatFee: 0,
+  exportFields: ['name', 'role', 'document', 'responsible'] as string[],
   rating: 0,
   notes: '',
 };
@@ -77,8 +88,13 @@ export default function SuppliersPage() {
       email: s.email || '',
       phone: s.phone || '',
       address: s.address || '',
-      costPerPerson: s.costPerPerson,
-      costPerChild: s.costPerChild,
+      billingMode: s.billingMode || 'per_person',
+      costPerPerson: s.costPerPerson || 0,
+      costPerChild: s.costPerChild || 0,
+      costPerCar: s.costPerCar || 0,
+      costPerRoom: s.costPerRoom || 0,
+      flatFee: s.flatFee || 0,
+      exportFields: s.exportFields?.length ? s.exportFields : ['name', 'role', 'document', 'responsible'],
       rating: s.rating,
       notes: s.notes || '',
     });
@@ -167,15 +183,21 @@ export default function SuppliersPage() {
                 {s.type}
               </span>
 
-              {/* custos por pessoa/criança */}
-              <div className="grid grid-cols-2 gap-2 mb-3">
-                <div className="bg-gray-50 rounded-lg p-2">
-                  <p className="text-[10px] uppercase text-gray-400">Custo / Adulto</p>
-                  <p className="font-bold text-rose-600">{formatBRL(s.costPerPerson)}</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-2">
-                  <p className="text-[10px] uppercase text-gray-400">Custo / Criança</p>
-                  <p className="font-bold text-rose-600">{formatBRL(s.costPerChild)}</p>
+              {/* regra de pagamento + custo */}
+              <div className="mb-3">
+                <p className="text-[10px] uppercase text-gray-400 mb-1">
+                  {BILLING_LABELS[s.billingMode] || 'Por pessoa'}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {(!s.billingMode || s.billingMode === 'per_person') && (
+                    <>
+                      <CostChip label="Adulto" value={s.costPerPerson} />
+                      <CostChip label="Criança" value={s.costPerChild} />
+                    </>
+                  )}
+                  {s.billingMode === 'per_car' && <CostChip label="Por carro" value={s.costPerCar} />}
+                  {s.billingMode === 'per_room' && <CostChip label="Por quarto" value={s.costPerRoom} />}
+                  {s.billingMode === 'flat' && <CostChip label="Valor fixo" value={s.flatFee} />}
                 </div>
               </div>
 
@@ -243,24 +265,94 @@ export default function SuppliersPage() {
                 <option value="passeio">Passeio</option>
                 <option value="outro">Outro</option>
               </select>
-              <div>
-                <label className="text-xs text-gray-500">Custo por adulto (R$)</label>
-                <input
-                  type="number"
-                  className="input"
-                  value={form.costPerPerson}
-                  onChange={(e) => setForm({ ...form, costPerPerson: Number(e.target.value) })}
-                />
+              {/* Regra de pagamento */}
+              <div className="md:col-span-2 bg-gray-50 rounded-lg p-3 border border-gray-100">
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                  Regra de pagamento
+                </label>
+                <select
+                  className="input mt-1"
+                  value={form.billingMode}
+                  onChange={(e) => setForm({ ...form, billingMode: e.target.value as BillingMode })}
+                >
+                  {Object.entries(BILLING_LABELS).map(([k, label]) => (
+                    <option key={k} value={k}>{label}</option>
+                  ))}
+                </select>
+
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  {form.billingMode === 'per_person' && (
+                    <>
+                      <div>
+                        <label className="text-xs text-gray-500">Custo por adulto (R$)</label>
+                        <input type="number" className="input" value={form.costPerPerson}
+                          onChange={(e) => setForm({ ...form, costPerPerson: Number(e.target.value) })} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Custo por criança (R$)</label>
+                        <input type="number" className="input" value={form.costPerChild}
+                          onChange={(e) => setForm({ ...form, costPerChild: Number(e.target.value) })} />
+                      </div>
+                    </>
+                  )}
+                  {form.billingMode === 'per_car' && (
+                    <div>
+                      <label className="text-xs text-gray-500">Custo por carro (R$)</label>
+                      <input type="number" className="input" value={form.costPerCar}
+                        onChange={(e) => setForm({ ...form, costPerCar: Number(e.target.value) })} />
+                    </div>
+                  )}
+                  {form.billingMode === 'per_room' && (
+                    <div>
+                      <label className="text-xs text-gray-500">Custo por quarto/diária (R$)</label>
+                      <input type="number" className="input" value={form.costPerRoom}
+                        onChange={(e) => setForm({ ...form, costPerRoom: Number(e.target.value) })} />
+                    </div>
+                  )}
+                  {form.billingMode === 'flat' && (
+                    <div>
+                      <label className="text-xs text-gray-500">Valor fixo da expedição (R$)</label>
+                      <input type="number" className="input" value={form.flatFee}
+                        onChange={(e) => setForm({ ...form, flatFee: Number(e.target.value) })} />
+                    </div>
+                  )}
+                </div>
               </div>
-              <div>
-                <label className="text-xs text-gray-500">Custo por criança (R$)</label>
-                <input
-                  type="number"
-                  className="input"
-                  value={form.costPerChild}
-                  onChange={(e) => setForm({ ...form, costPerChild: Number(e.target.value) })}
-                />
+
+              {/* Dados a exportar na planilha */}
+              <div className="md:col-span-2 bg-gray-50 rounded-lg p-3 border border-gray-100">
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                  Dados na planilha deste fornecedor
+                </label>
+                <p className="text-xs text-gray-400 mb-2">Marque as colunas que aparecem no CSV (uma pessoa por linha).</p>
+                <div className="flex flex-wrap gap-2">
+                  {EXPORT_FIELDS.map((f) => {
+                    const active = form.exportFields.includes(f.id);
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            exportFields: active
+                              ? form.exportFields.filter((x) => x !== f.id)
+                              : [...form.exportFields, f.id],
+                          })
+                        }
+                        className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                          active
+                            ? 'bg-blue-600 border-blue-600 text-white'
+                            : 'bg-white border-gray-200 text-gray-700 hover:border-blue-300'
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+
               <input
                 className="input"
                 placeholder="Email"
@@ -309,6 +401,15 @@ export default function SuppliersPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function CostChip({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="bg-gray-50 rounded-lg px-2 py-1">
+      <span className="text-[10px] uppercase text-gray-400">{label}: </span>
+      <span className="font-bold text-rose-600 text-sm">{formatBRL(value || 0)}</span>
     </div>
   );
 }

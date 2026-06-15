@@ -12,14 +12,35 @@ import {
   Check,
   Trash2,
   BarChart3,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatBRL, formatDate } from '@/lib/format';
 
 type Tab = 'geral' | 'receber' | 'pagar' | 'fluxo' | 'setor';
+type Period = 'geral' | 'mes';
+
+const MONTHS_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+function nowMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+function shiftMonth(m: string, delta: number): string {
+  const [y, mo] = m.split('-').map(Number);
+  const d = new Date(y, mo - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+function labelMonth(m: string): string {
+  const [y, mo] = m.split('-').map(Number);
+  return `${MONTHS_SHORT[mo - 1]} ${y}`;
+}
 
 export default function FinancialPage() {
   const [tab, setTab] = useState<Tab>('geral');
+  const [period, setPeriod] = useState<Period>('geral');
+  const [month, setMonth] = useState(nowMonth);
   const [data, setData] = useState<any>(null);
   const [payables, setPayables] = useState<any[]>([]);
   const [expeditions, setExpeditions] = useState<any[]>([]);
@@ -27,8 +48,9 @@ export default function FinancialPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    const qs = period === 'mes' ? `?month=${month}` : '';
     const [s, p, e] = await Promise.all([
-      fetch('/api/finance/summary').then((r) => r.json()),
+      fetch(`/api/finance/summary${qs}`).then((r) => r.json()),
       fetch('/api/payables').then((r) => r.json()),
       fetch('/api/expeditions').then((r) => r.json()),
     ]);
@@ -36,7 +58,7 @@ export default function FinancialPage() {
     setPayables(p.payables || []);
     setExpeditions(e.expeditions || []);
     setLoading(false);
-  }, []);
+  }, [period, month]);
 
   useEffect(() => {
     load();
@@ -54,12 +76,50 @@ export default function FinancialPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
         <div>
           <h1 className="text-4xl font-bold">Financeiro</h1>
-          <p className="text-gray-500 text-sm mt-1">Gestão completa baseada nas expedições</p>
+          <p className="text-gray-500 text-sm mt-1">
+            {period === 'mes'
+              ? `Expedições de ${labelMonth(month)}`
+              : 'Visão geral de todas as expedições'}
+          </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Período */}
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+            {(['geral', 'mes'] as Period[]).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                  period === p ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {p === 'geral' ? 'Geral' : 'Por Mês'}
+              </button>
+            ))}
+          </div>
+
+          {/* Navegação de mês */}
+          {period === 'mes' && (
+            <div className="flex items-center gap-1 border border-gray-200 rounded-lg bg-white">
+              <button
+                onClick={() => setMonth((m) => shiftMonth(m, -1))}
+                className="p-1.5 hover:bg-gray-50 rounded-l-lg"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span className="px-2 text-sm font-medium w-20 text-center">{labelMonth(month)}</span>
+              <button
+                onClick={() => setMonth((m) => shiftMonth(m, 1))}
+                className="p-1.5 hover:bg-gray-50 rounded-r-lg"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
+
           <Link href="/dashboard/statistics" className="btn btn-primary flex items-center gap-2">
             <BarChart3 size={18} /> Estatísticas
           </Link>
