@@ -83,7 +83,7 @@ export default function StatisticsPage() {
         <Kpi icon={<TrendingUp className="text-emerald-600" />} label="Lucro total" value={formatBRL(k.totalLucro)} />
         <Kpi icon={<Percent className="text-amber-600" />} label="Margem média" value={`${k.margemMedia.toFixed(1)}%`} />
         <Kpi icon={<Ticket className="text-violet-600" />} label="Ticket médio" value={formatBRL(k.ticketMedio)} />
-        <Kpi icon={<Gauge className="text-pink-600" />} label="Ocupação média" value={`${k.ocupacaoMedia.toFixed(0)}%`} sub={`${k.totalParticipantes}/${k.totalVagas} vagas`} />
+        <Kpi icon={<Gauge className="text-pink-600" />} label="Ocupação média" value={`${k.ocupacaoMedia.toFixed(0)}%`} sub={`${k.totalCarros}/${k.totalVagas} carros · ${k.totalParticipantes} pessoas`} />
         <Kpi icon={<Target className="text-teal-600" />} label="Conversão de leads" value={`${k.taxaConversao.toFixed(0)}%`} sub={`${k.convertidos}/${k.totalLeads}`} />
         <Kpi icon={<Wallet className="text-amber-600" />} label="% Recebido" value={`${k.percentualRecebido.toFixed(0)}%`} sub={formatBRL(k.totalRecebido)} />
         <Kpi icon={<Users className="text-amber-600" />} label="Clientes" value={String(k.totalClientes)} sub={`${k.totalMatriculas} matrículas`} />

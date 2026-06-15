@@ -31,15 +31,16 @@ export async function buildStatistics() {
       name: e.routeName,
       sector: e.sector?.trim() || e.routeName,
       status: e.status,
-      slots: e.slots,
-      participants: f.totalParticipants,
-      occupancy: e.slots > 0 ? (f.totalParticipants / e.slots) * 100 : 0,
+      slots: e.slots, // vagas = carros
+      cars: f.cars,
+      participants: f.totalParticipants, // pessoas (informativo)
+      occupancy: e.slots > 0 ? (f.cars / e.slots) * 100 : 0,
       contratado: f.contractedRevenue,
       recebido: f.totalPaid,
       custo: f.totalCost,
       lucro,
       margem: f.contractedRevenue > 0 ? (lucro / f.contractedRevenue) * 100 : 0,
-      clientes: e.enrollments.filter((x) => x.status !== 'cancelado').length,
+      clientes: f.cars,
     };
   });
 
@@ -49,9 +50,10 @@ export async function buildStatistics() {
   const totalRecebido = sum(perExp, 'recebido');
   const totalCusto = sum(perExp, 'custo');
   const totalLucro = totalContratado - totalCusto;
-  const totalMatriculas = sum(perExp, 'clientes');
-  const totalVagas = sum(perExp, 'slots');
-  const totalParticipantes = sum(perExp, 'participants');
+  const totalMatriculas = sum(perExp, 'clientes'); // = carros matriculados
+  const totalVagas = sum(perExp, 'slots'); // capacidade total em carros
+  const totalCarros = sum(perExp, 'cars');
+  const totalParticipantes = sum(perExp, 'participants'); // pessoas
 
   // ── Faturamento mensal (recebido por mês + contratado por mês de início) ──
   const monthly = new Map<string, { key: string; label: string; recebido: number; contratado: number }>();
@@ -141,7 +143,8 @@ export async function buildStatistics() {
       margemMedia: totalContratado > 0 ? (totalLucro / totalContratado) * 100 : 0,
       ticketMedio: totalMatriculas > 0 ? totalContratado / totalMatriculas : 0,
       totalMatriculas,
-      ocupacaoMedia: totalVagas > 0 ? (totalParticipantes / totalVagas) * 100 : 0,
+      ocupacaoMedia: totalVagas > 0 ? (totalCarros / totalVagas) * 100 : 0,
+      totalCarros,
       totalParticipantes,
       totalVagas,
       totalLeads,

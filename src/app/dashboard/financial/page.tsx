@@ -215,7 +215,7 @@ function GeralTab({ data }: any) {
           <Row label="A pagar (pendente)" value={formatBRL(k.aPagar)} color="text-rose-600" />
           <hr />
           <Row label="Lucro previsto" value={formatBRL(k.lucroPrevisto)} color="text-amber-600" bold />
-          <Row label="Potencial de vagas livres" value={formatBRL(k.previsaoPotencial)} color="text-gray-500" />
+          <Row label="Potencial de vagas livres (estimado pelo ticket médio/carro)" value={formatBRL(k.previsaoPotencial)} color="text-gray-500" />
           <Row label="Previsão total de faturamento" value={formatBRL(k.previsaoTotal)} bold />
         </div>
       </div>

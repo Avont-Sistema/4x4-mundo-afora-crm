@@ -170,9 +170,12 @@ export async function buildFinanceSummary(opts: { month?: string } = {}) {
     totalContratado += fin.contractedRevenue;
     totalCustoPrevisto += fin.totalCost;
 
-    // previsão: potencial das vagas ainda livres
+    // previsão: potencial das vagas (carros) ainda livres.
+    // Não há valor fixo por vaga — cada carro negocia o próprio preço com nº
+    // variável de acompanhantes. Estimamos pelo ticket médio por carro já
+    // contratado nesta expedição (0 enquanto não houver matrículas).
     if (exp.status !== 'finalizada') {
-      previsaoPotencial += Math.max(fin.slotsAvailable, 0) * exp.pricePerPerson;
+      previsaoPotencial += Math.max(fin.slotsAvailable, 0) * fin.avgTicketPerCar;
     }
 
     // saídas: custos avulsos (com data) entram no fluxo de caixa

@@ -36,7 +36,8 @@ interface Enrollment {
 }
 interface Supplier { id: string; name: string; type: string; costPerPerson: number; costPerChild: number }
 interface Finance {
-  totalAdults: number; totalChildren: number; totalParticipants: number; slotsAvailable: number;
+  totalAdults: number; totalChildren: number; totalParticipants: number;
+  cars: number; slotsAvailable: number; avgTicketPerCar: number;
   revenueGoal: number; contractedRevenue: number; totalPaid: number; totalPending: number;
   supplierCost: number; manualCostTotal: number; totalCost: number; profit: number;
   profitMargin: number; paymentProgress: number;
@@ -138,7 +139,7 @@ export default function ExpeditionDetailPage() {
           <p className="text-gray-500 text-sm mt-1">
             {exp.location ? `${exp.location} · ` : ''}
             {formatDate(exp.startDate)} – {formatDate(exp.endDate)} ·{' '}
-            {f.totalParticipants}/{exp.slots} vagas
+            {f.cars}/{exp.slots} carros · {f.totalParticipants} pessoas
           </p>
         </div>
         <button

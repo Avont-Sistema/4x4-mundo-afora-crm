@@ -12,6 +12,7 @@ import { formatBRL, formatDate } from '@/lib/format';
 // ── Types ─────────────────────────────────────────────────────────────────
 interface Finance {
   totalParticipants: number;
+  cars: number;
   slotsAvailable: number;
   contractedRevenue: number;
   revenueGoal: number;
@@ -174,7 +175,7 @@ export default function Dashboard() {
     if (openSlots > 0 && ['aberta', 'em_andamento'].includes(exp.status)) {
       warnings.push({
         type: 'info',
-        text: `"${exp.routeName}" tem ${openSlots} vaga${openSlots !== 1 ? 's' : ''} disponíve${openSlots !== 1 ? 'is' : 'l'}`,
+        text: `"${exp.routeName}" tem ${openSlots} vaga${openSlots !== 1 ? 's' : ''} (carro${openSlots !== 1 ? 's' : ''}) disponíve${openSlots !== 1 ? 'is' : 'l'}`,
         link: `/dashboard/expeditions/${exp.id}`,
       });
     }
@@ -353,7 +354,7 @@ export default function Dashboard() {
                 )}
                 <div className="mt-1">
                   <div className="flex justify-between text-[10px] text-gray-500 mb-1">
-                    <span>{exp.finance.totalParticipants}/{exp.slots} vagas</span>
+                    <span>{exp.finance.cars}/{exp.slots} carros · {exp.finance.totalParticipants} pessoas</span>
                     <span className="text-emerald-600 font-medium">
                       {exp.finance.paymentProgress.toFixed(0)}% pago
                     </span>

@@ -136,7 +136,9 @@ export interface ExpeditionFinance {
   totalAdults: number;
   totalChildren: number;
   totalParticipants: number;
-  slotsAvailable: number;
+  cars: number; // carros matriculados (1 matrícula = 1 carro/comitiva)
+  slotsAvailable: number; // vagas (carros) ainda livres
+  avgTicketPerCar: number; // ticket médio por carro (faturamento contratado / carros)
   // faturamento
   revenueGoal: number; // meta manual
   contractedRevenue: number; // soma dos valores acordados (matrículas ativas)
@@ -164,7 +166,11 @@ export function computeFinance(
   const totalChildren = active.reduce((a, e) => a + e.children, 0);
   const totalParticipants = totalAdults + totalChildren;
 
+  // cada matrícula = 1 carro/comitiva. As vagas da expedição são em carros.
+  const cars = active.length;
+
   const contractedRevenue = active.reduce((a, e) => a + e.agreedPrice, 0);
+  const avgTicketPerCar = cars > 0 ? contractedRevenue / cars : 0;
   const totalPaid = exp.enrollments.reduce(
     (a, e) => a + e.payments.reduce((s, p) => s + p.amount, 0),
     0
@@ -175,7 +181,6 @@ export function computeFinance(
   const revenueBase =
     contractedRevenue > 0 ? contractedRevenue : exp.revenueGoal;
 
-  const cars = active.length;
   const ctx = { adults: totalAdults, children: totalChildren, cars, rooms: cars };
   const used = suppliers.filter((s) => exp.supplierIds.includes(s.id));
   const supplierCost = used.reduce((a, s) => a + calcSupplierCost(s, ctx), 0);
@@ -191,7 +196,9 @@ export function computeFinance(
     totalAdults,
     totalChildren,
     totalParticipants,
-    slotsAvailable: exp.slots - totalParticipants,
+    cars,
+    slotsAvailable: exp.slots - cars,
+    avgTicketPerCar,
     revenueGoal: exp.revenueGoal,
     contractedRevenue,
     totalPaid,

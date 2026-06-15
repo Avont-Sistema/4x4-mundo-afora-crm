@@ -8,6 +8,7 @@ import { formatBRL, formatDate } from '@/lib/format';
 
 interface Finance {
   totalParticipants: number;
+  cars: number;
   contractedRevenue: number;
   revenueGoal: number;
   totalPaid: number;
@@ -81,9 +82,6 @@ export default function ExpeditionsPage() {
   useEffect(() => {
     fetchExpeditions();
   }, [fetchExpeditions]);
-
-  const projectedRevenue =
-    form.revenueGoal > 0 ? form.revenueGoal : form.slots * form.pricePerPerson;
 
   const create = async () => {
     if (!form.routeName.trim()) {
@@ -162,7 +160,7 @@ export default function ExpeditionsPage() {
                     </p>
                   )}
                   <p className="flex items-center gap-1">
-                    <Users size={14} /> {f.totalParticipants}/{exp.slots} vagas
+                    <Users size={14} /> {f.cars}/{exp.slots} carros · {f.totalParticipants} pessoas
                   </p>
                   {exp.startDate && (
                     <p className="text-xs">
@@ -279,7 +277,7 @@ export default function ExpeditionsPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500">Vagas</label>
+                  <label className="text-xs text-gray-500">Vagas (carros)</label>
                   <input
                     type="number"
                     className="input"
@@ -297,7 +295,7 @@ export default function ExpeditionsPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500">Preço por pessoa (R$)</label>
+                  <label className="text-xs text-gray-500">Preço sugerido por adulto (R$)</label>
                   <input
                     type="number"
                     className="input"
@@ -306,7 +304,7 @@ export default function ExpeditionsPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500">Preço por criança (R$)</label>
+                  <label className="text-xs text-gray-500">Preço sugerido por criança (R$)</label>
                   <input
                     type="number"
                     className="input"
@@ -317,12 +315,16 @@ export default function ExpeditionsPage() {
               </div>
 
               {/* Prévia */}
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4 flex items-center gap-2 text-sm">
-                <TrendingUp size={16} className="text-amber-600" />
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4 flex items-start gap-2 text-sm">
+                <TrendingUp size={16} className="text-amber-600 mt-0.5 shrink-0" />
                 <span>
-                  Faturamento projetado:{' '}
-                  <strong>{formatBRL(projectedRevenue)}</strong>{' '}
-                  ({form.slots} vagas × {formatBRL(form.pricePerPerson)})
+                  {form.revenueGoal > 0 ? (
+                    <>Meta de faturamento: <strong>{formatBRL(form.revenueGoal)}</strong>.{' '}</>
+                  ) : null}
+                  Cada vaga é um <strong>carro</strong> ({form.slots} carros) e cada carro leva
+                  quantos acompanhantes quiser. O preço é negociado por carro na matrícula, então
+                  o faturamento real é a soma desses valores — os preços por pessoa acima são apenas
+                  uma sugestão.
                 </span>
               </div>
 
