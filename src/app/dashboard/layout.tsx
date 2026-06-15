@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Menu, X, LogOut, BarChart3, Users, MapPin, DollarSign,
   MessageCircle, Settings, Mail, Plug, Calendar,
@@ -32,6 +32,13 @@ const menuItems: MenuItem[] = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.replace('/login');
+    router.refresh();
+  };
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -94,7 +101,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Logout */}
         <div className="border-t border-gray-700 p-4">
-          <button className="w-full flex items-center gap-3 px-4 py-2 hover:bg-gray-800 rounded transition-colors text-left text-gray-300">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-4 py-2 hover:bg-gray-800 rounded transition-colors text-left text-gray-300"
+          >
             <LogOut size={20} />
             {sidebarOpen && <span>Sair</span>}
           </button>

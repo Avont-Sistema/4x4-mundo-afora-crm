@@ -1,20 +1,38 @@
 'use client';
 
-import Link from 'next/link';
 import { useState } from 'react';
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Lock, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-  });
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement authentication
-    console.log('Login attempt:', formData);
+    setError('');
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) {
+        router.replace('/dashboard');
+        router.refresh();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data?.error || 'Senha incorreta');
+        setLoading(false);
+      }
+    } catch {
+      setError('Erro de conexão. Tente novamente.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -27,30 +45,16 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="seu@email.com"
-                className="input pl-10"
-                required
-              />
-            </div>
-          </div>
-
-          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Senha</label>
             <div className="relative">
               <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
               <input
                 type={showPassword ? 'text' : 'password'}
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 className="input pl-10 pr-10"
+                autoFocus
                 required
               />
               <button
@@ -63,25 +67,12 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <button type="submit" className="btn btn-primary w-full mt-6">
-            Entrar
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <button type="submit" disabled={loading} className="btn btn-primary w-full mt-6 disabled:opacity-60">
+            {loading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
-
-        <div className="mt-6 text-center">
-          <p className="text-gray-600 text-sm">
-            Não tem uma conta?{' '}
-            <Link href="/register" className="text-blue-600 hover:text-blue-700 font-medium">
-              Registre-se aqui
-            </Link>
-          </p>
-        </div>
-
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <p className="text-gray-500 text-xs text-center">
-            Demo: você pode usar qualquer email/senha para acessar o dashboard
-          </p>
-        </div>
       </div>
     </div>
   );
