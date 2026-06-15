@@ -48,7 +48,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       >
         {/* Logo */}
         <div className="p-4 border-b border-gray-700 flex justify-between items-center">
-          {sidebarOpen && <h1 className="text-lg font-bold">4x4 Mundo Afora</h1>}
+          {sidebarOpen && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src="/logo.png" alt="4x4 Mundo Afora" className="h-9 w-auto" />
+          )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="p-1 hover:bg-gray-800 rounded"
@@ -89,7 +92,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 href={item.href}
                 title={item.label}
                 className={`px-4 py-3 flex items-center gap-3 transition-colors ${
-                  isActive ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'
+                  isActive ? 'bg-yellow-400 text-black' : 'text-gray-300 hover:bg-gray-800'
                 }`}
               >
                 <item.icon size={20} />

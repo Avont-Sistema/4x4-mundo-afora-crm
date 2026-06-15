@@ -23,7 +23,7 @@ const statusColors = {
 
 const paymentStatusColors = {
   aguardando: 'bg-gray-100 text-gray-800',
-  pagto_parcial: 'bg-blue-100 text-blue-800',
+  pagto_parcial: 'bg-yellow-100 text-amber-800',
   pago: 'bg-green-100 text-green-800',
   cancelado: 'bg-red-100 text-red-800',
 };
@@ -58,7 +58,7 @@ export default function BookingsPage() {
                 <td className="px-6 py-4 font-medium">{booking.clientName}</td>
                 <td className="px-6 py-4">{booking.expeditionName}</td>
                 <td className="px-6 py-4 text-center">{booking.quantity}</td>
-                <td className="px-6 py-4 font-bold text-blue-600">R$ {booking.totalPrice.toLocaleString('pt-BR')}</td>
+                <td className="px-6 py-4 font-bold text-amber-600">R$ {booking.totalPrice.toLocaleString('pt-BR')}</td>
                 <td className="px-6 py-4">
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[booking.status as keyof typeof statusColors]}`}>
                     {booking.status}
@@ -70,8 +70,8 @@ export default function BookingsPage() {
                   </span>
                 </td>
                 <td className="px-6 py-4 text-center">
-                  <button className="p-2 hover:bg-blue-100 rounded transition-colors">
-                    <Eye size={16} className="text-blue-600" />
+                  <button className="p-2 hover:bg-yellow-100 rounded transition-colors">
+                    <Eye size={16} className="text-amber-600" />
                   </button>
                 </td>
               </tr>

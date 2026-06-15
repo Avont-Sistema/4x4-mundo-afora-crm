@@ -184,7 +184,7 @@ export default function ClientForm({
               <h3 className="text-sm font-bold text-gray-700 flex items-center gap-1">
                 <Users size={14} /> Família (cônjuge, filhos)
               </h3>
-              <button onClick={addMember} className="text-sm text-blue-600 flex items-center gap-1">
+              <button onClick={addMember} className="text-sm text-amber-600 flex items-center gap-1">
                 <UserPlus size={14} /> Adicionar
               </button>
             </div>

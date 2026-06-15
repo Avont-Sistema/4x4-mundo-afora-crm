@@ -63,7 +63,7 @@ const enrollmentStatusColor: Record<string, string> = {
 
 const expStatusColor: Record<string, string> = {
   planejamento: 'bg-gray-100 text-gray-700',
-  aberta: 'bg-blue-100 text-blue-700',
+  aberta: 'bg-yellow-100 text-amber-700',
   em_andamento: 'bg-amber-100 text-amber-700',
   fechada: 'bg-emerald-100 text-emerald-700',
   finalizada: 'bg-purple-100 text-purple-700',
@@ -208,7 +208,7 @@ export default function ExpeditionDetailPage() {
             onClick={() => setTab(t.k as typeof tab)}
             className={`pb-3 text-sm font-medium flex items-center gap-2 transition-colors ${
               tab === t.k
-                ? 'text-blue-600 border-b-2 border-blue-600'
+                ? 'text-amber-600 border-b-2 border-yellow-400'
                 : 'text-gray-400 hover:text-gray-600'
             }`}
           >
@@ -418,7 +418,7 @@ function ClientsTab({
               </select>
               <p className="text-xs text-gray-400 mt-1">
                 Não está na lista?{' '}
-                <a href="/dashboard/clients" className="text-blue-600">
+                <a href="/dashboard/clients" className="text-amber-600">
                   Cadastre o cliente primeiro
                 </a>
               </p>
@@ -514,7 +514,7 @@ function SuppliersTab({ exp, onApply }: { exp: Expedition; onApply: (d: any) => 
               key={s.id}
               onClick={() => toggle(s.id)}
               className={`card text-left transition-all ${
-                active ? 'ring-2 ring-blue-500 bg-blue-50' : 'hover:shadow-md'
+                active ? 'ring-2 ring-yellow-400 bg-yellow-50' : 'hover:shadow-md'
               }`}
             >
               <div className="flex justify-between items-start mb-2">
@@ -527,7 +527,7 @@ function SuppliersTab({ exp, onApply }: { exp: Expedition; onApply: (d: any) => 
                 Adulto: <strong>{formatBRL(s.costPerPerson)}</strong> · Criança:{' '}
                 <strong>{formatBRL(s.costPerChild)}</strong>
               </p>
-              <p className={`text-xs mt-2 font-medium ${active ? 'text-blue-600' : 'text-gray-400'}`}>
+              <p className={`text-xs mt-2 font-medium ${active ? 'text-amber-600' : 'text-gray-400'}`}>
                 {active ? '✓ Incluído no projeto' : 'Clique para incluir'}
               </p>
             </button>
@@ -536,7 +536,7 @@ function SuppliersTab({ exp, onApply }: { exp: Expedition; onApply: (d: any) => 
         {all.length === 0 && (
           <div className="col-span-full text-center py-8 text-gray-400">
             Nenhum fornecedor cadastrado.{' '}
-            <a href="/dashboard/suppliers" className="text-blue-600">
+            <a href="/dashboard/suppliers" className="text-amber-600">
               Cadastrar fornecedores
             </a>
           </div>

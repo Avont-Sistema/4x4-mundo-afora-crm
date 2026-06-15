@@ -207,9 +207,9 @@ export default function CampaignsPage() {
 
       {/* Info Cards */}
       <div className="grid md:grid-cols-2 gap-6 mt-8">
-        <div className="card bg-blue-50 border-blue-200">
+        <div className="card bg-yellow-50 border-yellow-200">
           <div className="flex items-start gap-3">
-            <Mail className="w-6 h-6 text-blue-600 flex-shrink-0 mt-1" />
+            <Mail className="w-6 h-6 text-amber-600 flex-shrink-0 mt-1" />
             <div>
               <h3 className="font-bold mb-2">Dicas para Campanhas Efetivas</h3>
               <ul className="text-sm space-y-1 text-gray-700">

@@ -32,7 +32,7 @@ interface Expedition {
 
 const statusColors: Record<string, string> = {
   planejamento: 'bg-gray-100 text-gray-700',
-  aberta: 'bg-blue-100 text-blue-700',
+  aberta: 'bg-yellow-100 text-amber-700',
   em_andamento: 'bg-amber-100 text-amber-700',
   fechada: 'bg-emerald-100 text-emerald-700',
   finalizada: 'bg-purple-100 text-purple-700',
@@ -317,8 +317,8 @@ export default function ExpeditionsPage() {
               </div>
 
               {/* Prévia */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4 flex items-center gap-2 text-sm">
-                <TrendingUp size={16} className="text-blue-600" />
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4 flex items-center gap-2 text-sm">
+                <TrendingUp size={16} className="text-amber-600" />
                 <span>
                   Faturamento projetado:{' '}
                   <strong>{formatBRL(projectedRevenue)}</strong>{' '}

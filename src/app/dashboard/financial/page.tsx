@@ -93,7 +93,7 @@ export default function FinancialPage() {
                 key={p}
                 onClick={() => setPeriod(p)}
                 className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                  period === p ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                  period === p ? 'bg-yellow-400 text-black' : 'bg-white text-gray-600 hover:bg-gray-50'
                 }`}
               >
                 {p === 'geral' ? 'Geral' : 'Por Mês'}
@@ -134,7 +134,7 @@ export default function FinancialPage() {
         <Kpi
           title="A Receber"
           value={formatBRL(k.aReceber)}
-          icon={<Wallet className="text-blue-600" />}
+          icon={<Wallet className="text-amber-600" />}
           sub={k.vencido > 0 ? `${formatBRL(k.vencido)} vencido` : 'em dia'}
           subColor={k.vencido > 0 ? 'text-rose-600' : 'text-emerald-600'}
           highlight
@@ -162,7 +162,7 @@ export default function FinancialPage() {
             key={t.k}
             onClick={() => setTab(t.k as Tab)}
             className={`pb-3 text-sm font-medium whitespace-nowrap ${
-              tab === t.k ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400 hover:text-gray-600'
+              tab === t.k ? 'text-amber-600 border-b-2 border-yellow-400' : 'text-gray-400 hover:text-gray-600'
             }`}
           >
             {t.label}
@@ -204,7 +204,7 @@ function GeralTab({ data }: any) {
         <div className="space-y-3 text-sm">
           <Row label="Faturamento contratado" value={formatBRL(k.contratado)} />
           <Row label="Já recebido" value={formatBRL(k.recebido)} color="text-emerald-600" />
-          <Row label="A receber" value={formatBRL(k.aReceber)} color="text-blue-600" />
+          <Row label="A receber" value={formatBRL(k.aReceber)} color="text-amber-600" />
           <Row label="Vencido" value={formatBRL(k.vencido)} color="text-rose-600" />
         </div>
       </div>
@@ -268,7 +268,7 @@ function ReceberTab({ data, onRefresh }: any) {
             key={f}
             onClick={() => setFilter(f)}
             className={`px-3 py-1.5 rounded-lg text-sm ${
-              filter === f ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
+              filter === f ? 'bg-yellow-400 text-black' : 'bg-gray-100 text-gray-600'
             }`}
           >
             {f === 'todos' ? 'Em aberto' : f === 'vencido' ? 'Vencidos' : 'A vencer'}
@@ -416,7 +416,7 @@ function PagarTab({ payables, expeditions, onRefresh }: any) {
         </button>
       </div>
 
-      <div className="card flex flex-wrap items-end gap-3 bg-blue-50 border-blue-200">
+      <div className="card flex flex-wrap items-end gap-3 bg-yellow-50 border-yellow-200">
         <div className="flex-1 min-w-[220px]">
           <label className="text-xs text-gray-600">Gerar contas dos fornecedores de uma expedição</label>
           <select className="input" value={genExp} onChange={(e) => setGenExp(e.target.value)}>
@@ -501,7 +501,7 @@ function FluxoTab({ data }: any) {
             <div className="mt-2 space-y-1 text-sm">
               <Row label="Entradas" value={formatBRL(m.entradas)} color="text-emerald-600" />
               <Row label="Saídas" value={formatBRL(m.saidas)} color="text-rose-600" />
-              <Row label="Saldo" value={formatBRL(m.saldo)} color={m.saldo >= 0 ? 'text-blue-600' : 'text-rose-600'} bold />
+              <Row label="Saldo" value={formatBRL(m.saldo)} color={m.saldo >= 0 ? 'text-amber-600' : 'text-rose-600'} bold />
             </div>
           </div>
         ))}
@@ -583,7 +583,7 @@ function SetorTab({ data }: any) {
                 <td className="px-4 py-2 text-gray-500">{e.sector}</td>
                 <td className="px-4 py-2 text-right">{formatBRL(e.contratado)}</td>
                 <td className="px-4 py-2 text-right text-emerald-600">{formatBRL(e.recebido)}</td>
-                <td className="px-4 py-2 text-right text-blue-600">{formatBRL(e.aReceber)}</td>
+                <td className="px-4 py-2 text-right text-amber-600">{formatBRL(e.aReceber)}</td>
                 <td className="px-4 py-2 text-right text-rose-600">{formatBRL(e.custo)}</td>
                 <td className={`px-4 py-2 text-right font-bold ${e.lucro >= 0 ? 'text-amber-600' : 'text-rose-600'}`}>
                   {formatBRL(e.lucro)}

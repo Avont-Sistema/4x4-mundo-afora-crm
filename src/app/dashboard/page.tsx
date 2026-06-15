@@ -82,7 +82,7 @@ function relativeTime(iso: string): string {
 
 const STATUS_COLORS: Record<string, string> = {
   planejamento: 'bg-gray-100 text-gray-700',
-  aberta: 'bg-blue-100 text-blue-700',
+  aberta: 'bg-yellow-100 text-amber-700',
   em_andamento: 'bg-amber-100 text-amber-700',
   fechada: 'bg-emerald-100 text-emerald-700',
   finalizada: 'bg-purple-100 text-purple-700',
@@ -231,8 +231,8 @@ export default function Dashboard() {
         <KPICard
           label="Clientes Ativos"
           value={kpis ? String(kpis.totalClientes) : '–'}
-          icon={<Users className="w-8 h-8 text-blue-500 opacity-80" />}
-          bg="bg-blue-50"
+          icon={<Users className="w-8 h-8 text-amber-600 opacity-80" />}
+          bg="bg-yellow-50"
         />
         <KPICard
           label="Expedições Ativas"
@@ -281,7 +281,7 @@ export default function Dashboard() {
                 >
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
                     w.type === 'urgent' ? 'bg-rose-500' :
-                    w.type === 'warning' ? 'bg-amber-500' : 'bg-blue-400'
+                    w.type === 'warning' ? 'bg-amber-500' : 'bg-yellow-400'
                   }`} />
                   <span className={`text-sm flex-1 ${w.type === 'urgent' ? 'text-rose-700 font-medium' : 'text-gray-700'}`}>
                     {w.text}
@@ -296,7 +296,7 @@ export default function Dashboard() {
         {/* Notificações */}
         <div className="card">
           <div className="flex items-center gap-2 mb-4">
-            <Bell size={18} className="text-blue-500" />
+            <Bell size={18} className="text-amber-600" />
             <h2 className="text-lg font-bold">Últimas Atividades</h2>
           </div>
           {recentEvents.length === 0 ? (
@@ -306,11 +306,11 @@ export default function Dashboard() {
               {recentEvents.map((ev, i) => (
                 <div key={i} className="flex items-start gap-2.5">
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    ev.kind === 'payment' ? 'bg-emerald-100' : 'bg-blue-100'
+                    ev.kind === 'payment' ? 'bg-emerald-100' : 'bg-yellow-100'
                   }`}>
                     {ev.kind === 'payment'
                       ? <CreditCard size={13} className="text-emerald-600" />
-                      : <UserCheck size={13} className="text-blue-600" />}
+                      : <UserCheck size={13} className="text-amber-600" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-gray-700 leading-snug">{ev.text}</p>
@@ -337,7 +337,7 @@ export default function Dashboard() {
                 className="card py-3 px-4 hover:shadow-md transition-shadow flex flex-col gap-2 group"
               >
                 <div className="flex justify-between items-start gap-2">
-                  <p className="font-semibold text-sm leading-tight group-hover:text-blue-600 transition-colors">
+                  <p className="font-semibold text-sm leading-tight group-hover:text-amber-600 transition-colors">
                     {exp.routeName}
                   </p>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${
@@ -377,9 +377,9 @@ export default function Dashboard() {
         <div className="lg:col-span-3 card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-bold flex items-center gap-2 text-gray-700">
-              <Clock size={16} className="text-blue-500" /> Próximas Expedições
+              <Clock size={16} className="text-amber-600" /> Próximas Expedições
             </h2>
-            <Link href="/dashboard/expeditions" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+            <Link href="/dashboard/expeditions" className="text-xs text-amber-600 hover:underline flex items-center gap-1">
               Ver todas <ArrowRight size={11} />
             </Link>
           </div>
@@ -397,13 +397,13 @@ export default function Dashboard() {
                     className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors group"
                   >
                     <div className={`w-11 h-11 rounded-lg flex flex-col items-center justify-center text-center flex-shrink-0 ${
-                      urgent ? 'bg-rose-100 text-rose-700' : 'bg-blue-50 text-blue-700'
+                      urgent ? 'bg-rose-100 text-rose-700' : 'bg-yellow-50 text-amber-700'
                     }`}>
                       <span className="text-base font-bold leading-none">{days}</span>
                       <span className="text-[9px] uppercase leading-none mt-0.5">dias</span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm group-hover:text-blue-600 truncate">{exp.routeName}</p>
+                      <p className="font-medium text-sm group-hover:text-amber-600 truncate">{exp.routeName}</p>
                       <p className="text-xs text-gray-400">
                         {formatDate(exp.startDate)}{exp.location ? ` · ${exp.location}` : ''}
                       </p>
@@ -449,7 +449,7 @@ export default function Dashboard() {
                   <button onClick={() => saveChecklist(checklist.map(i => i.id === item.id ? { ...i, done: !i.done } : i))}>
                     {item.done
                       ? <CheckSquare size={17} className="text-emerald-500 flex-shrink-0" />
-                      : <Square size={17} className="text-gray-300 hover:text-blue-400 flex-shrink-0" />}
+                      : <Square size={17} className="text-gray-300 hover:text-amber-500 flex-shrink-0" />}
                   </button>
                   <span className={`flex-1 text-sm ${item.done ? 'line-through text-gray-400' : 'text-gray-700'}`}>
                     {item.text}

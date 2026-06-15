@@ -150,7 +150,7 @@ export default function SettingsPage() {
         </button>
       </div>
       <div className="flex gap-6 border-b border-gray-200 mb-6">
-        <span className="pb-3 text-sm font-medium text-blue-600 border-b-2 border-blue-600 flex items-center gap-2">
+        <span className="pb-3 text-sm font-medium text-amber-600 border-b-2 border-yellow-400 flex items-center gap-2">
           <Plug size={16} /> Integrações
         </span>
       </div>
@@ -159,7 +159,7 @@ export default function SettingsPage() {
         {/* IA */}
         <section className="card">
           <div className="flex items-center gap-2 mb-4">
-            <Bot className="text-indigo-600" size={20} />
+            <Bot className="text-amber-600" size={20} />
             <h2 className="text-lg font-bold">Inteligência Artificial (Claude)</h2>
           </div>
           <div className="grid md:grid-cols-2 gap-4">

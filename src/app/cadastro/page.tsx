@@ -512,7 +512,7 @@ export default function CadastroPage() {
               {form.additionalPassengers.length < 4 && (
                 <button
                   onClick={addPassenger}
-                  className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                  className="text-sm text-amber-600 hover:text-amber-800 flex items-center gap-1"
                 >
                   <Plus size={14} /> Adicionar passageiro
                 </button>

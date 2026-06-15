@@ -80,9 +80,9 @@ export default function ClientsPage() {
             <button
               key={c.id}
               onClick={() => router.push(`/dashboard/clients/${c.id}`)}
-              className="card w-full text-left flex items-center gap-4 hover:shadow-md hover:border-blue-300 transition-all py-4"
+              className="card w-full text-left flex items-center gap-4 hover:shadow-md hover:border-yellow-300 transition-all py-4"
             >
-              <div className="w-11 h-11 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold flex-shrink-0">
+              <div className="w-11 h-11 rounded-full bg-yellow-100 text-amber-700 flex items-center justify-center font-bold flex-shrink-0">
                 {c.name.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">

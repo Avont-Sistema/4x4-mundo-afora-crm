@@ -25,7 +25,7 @@ interface Supplier {
 }
 
 const typeColors: Record<string, string> = {
-  hotel: 'bg-blue-100 text-blue-800',
+  hotel: 'bg-yellow-100 text-amber-800',
   restaurante: 'bg-orange-100 text-orange-800',
   transporte: 'bg-green-100 text-green-800',
   guia: 'bg-purple-100 text-purple-800',
@@ -166,8 +166,8 @@ export default function SuppliersPage() {
               <div className="flex justify-between items-start mb-3">
                 <h3 className="text-lg font-bold">{s.name}</h3>
                 <div className="flex gap-1">
-                  <button onClick={() => openEdit(s)} className="p-2 hover:bg-blue-50 rounded">
-                    <Edit2 size={16} className="text-blue-600" />
+                  <button onClick={() => openEdit(s)} className="p-2 hover:bg-yellow-50 rounded">
+                    <Edit2 size={16} className="text-amber-600" />
                   </button>
                   <button onClick={() => remove(s.id)} className="p-2 hover:bg-rose-50 rounded">
                     <Trash2 size={16} className="text-rose-600" />
@@ -342,8 +342,8 @@ export default function SuppliersPage() {
                         }
                         className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
                           active
-                            ? 'bg-blue-600 border-blue-600 text-white'
-                            : 'bg-white border-gray-200 text-gray-700 hover:border-blue-300'
+                            ? 'bg-yellow-400 border-yellow-400 text-black'
+                            : 'bg-white border-gray-200 text-gray-700 hover:border-yellow-300'
                         }`}
                       >
                         {f.label}

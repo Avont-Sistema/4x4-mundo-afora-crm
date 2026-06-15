@@ -75,7 +75,7 @@ export default function WhatsAppPage() {
             onClick={() => setTab(t.k as Tab)}
             className={`pb-3 text-sm font-medium flex items-center gap-2 ${
               tab === t.k
-                ? 'text-blue-600 border-b-2 border-blue-600'
+                ? 'text-amber-600 border-b-2 border-yellow-400'
                 : 'text-gray-400 hover:text-gray-600'
             }`}
           >
@@ -110,7 +110,7 @@ interface ConvMessage {
 }
 
 const modeBadge: Record<string, string> = {
-  bot: 'bg-indigo-100 text-indigo-700',
+  bot: 'bg-yellow-100 text-amber-700',
   human: 'bg-amber-100 text-amber-700',
   resolved: 'bg-gray-100 text-gray-600',
 };
@@ -192,7 +192,7 @@ function InboxTab() {
             key={c.phone}
             onClick={() => setSelected(c.phone)}
             className={`w-full text-left p-3 border-b border-gray-100 hover:bg-gray-50 ${
-              selected === c.phone ? 'bg-blue-50' : ''
+              selected === c.phone ? 'bg-yellow-50' : ''
             }`}
           >
             <div className="flex items-center justify-between">
@@ -222,7 +222,7 @@ function InboxTab() {
                     key={m}
                     onClick={() => changeMode(m)}
                     className={`px-3 py-1 ${
-                      mode === m ? 'bg-blue-600 text-white' : 'bg-white text-gray-600'
+                      mode === m ? 'bg-yellow-400 text-black' : 'bg-white text-gray-600'
                     }`}
                   >
                     {m === 'bot' ? 'Bot' : m === 'human' ? 'Humano' : 'Resolvido'}
@@ -240,7 +240,7 @@ function InboxTab() {
                         ? 'bg-gray-200 text-gray-900'
                         : m.via === 'human'
                         ? 'bg-amber-500 text-white'
-                        : 'bg-blue-600 text-white'
+                        : 'bg-yellow-400 text-black'
                     }`}
                   >
                     {m.via === 'human' && <p className="text-[9px] opacity-80 mb-0.5">Equipe</p>}
@@ -336,7 +336,7 @@ function SimulatorTab({ onAi }: { onAi: (v: boolean) => void }) {
             <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div
                 className={`max-w-xs px-3 py-2 rounded-lg text-sm whitespace-pre-wrap ${
-                  m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-900'
+                  m.role === 'user' ? 'bg-yellow-400 text-black' : 'bg-gray-200 text-gray-900'
                 }`}
               >
                 {m.content}
@@ -366,7 +366,7 @@ function SimulatorTab({ onAi }: { onAi: (v: boolean) => void }) {
         </div>
       </div>
 
-      <div className="card bg-blue-50 border-blue-200 h-fit">
+      <div className="card bg-yellow-50 border-yellow-200 h-fit">
         <h3 className="font-bold mb-2 flex items-center gap-2">
           <Bot size={18} /> O que o agente faz
         </h3>

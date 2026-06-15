@@ -5,11 +5,11 @@ import { BarChart3, Users, MapPin, DollarSign, MessageCircle, TrendingUp } from 
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-amber-100">
       {/* Header */}
       <header className="bg-white shadow-sm">
         <nav className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="text-2xl font-bold text-blue-600">4x4 Mundo Afora</div>
+          <div className="text-2xl font-bold text-amber-600">4x4 Mundo Afora</div>
           <div className="space-x-4">
             <Link href="/login" className="btn btn-secondary">
               Login
@@ -42,7 +42,7 @@ export default function Home() {
           {/* CRM */}
           <div className="card">
             <div className="flex items-center mb-4">
-              <Users className="w-8 h-8 text-blue-600 mr-3" />
+              <Users className="w-8 h-8 text-amber-600 mr-3" />
               <h3 className="text-xl font-bold">CRM Completo</h3>
             </div>
             <p className="text-gray-600">Gerencie leads, clientes e histórico de interações em um só lugar</p>
@@ -51,7 +51,7 @@ export default function Home() {
           {/* Expedições */}
           <div className="card">
             <div className="flex items-center mb-4">
-              <MapPin className="w-8 h-8 text-blue-600 mr-3" />
+              <MapPin className="w-8 h-8 text-amber-600 mr-3" />
               <h3 className="text-xl font-bold">Expedições</h3>
             </div>
             <p className="text-gray-600">Crie e gerencie expedições com disponibilidade e reservas automáticas</p>
@@ -60,7 +60,7 @@ export default function Home() {
           {/* Financeiro */}
           <div className="card">
             <div className="flex items-center mb-4">
-              <DollarSign className="w-8 h-8 text-blue-600 mr-3" />
+              <DollarSign className="w-8 h-8 text-amber-600 mr-3" />
               <h3 className="text-xl font-bold">Financeiro</h3>
             </div>
             <p className="text-gray-600">Controle receitas, despesas, fornecedores e estatísticas detalhadas</p>
@@ -69,7 +69,7 @@ export default function Home() {
           {/* IA WhatsApp */}
           <div className="card">
             <div className="flex items-center mb-4">
-              <MessageCircle className="w-8 h-8 text-blue-600 mr-3" />
+              <MessageCircle className="w-8 h-8 text-amber-600 mr-3" />
               <h3 className="text-xl font-bold">IA WhatsApp</h3>
             </div>
             <p className="text-gray-600">Agente IA que vende, cadastra e consulta expedições via WhatsApp</p>
@@ -78,7 +78,7 @@ export default function Home() {
           {/* Pagamentos */}
           <div className="card">
             <div className="flex items-center mb-4">
-              <BarChart3 className="w-8 h-8 text-blue-600 mr-3" />
+              <BarChart3 className="w-8 h-8 text-amber-600 mr-3" />
               <h3 className="text-xl font-bold">Pagamentos</h3>
             </div>
             <p className="text-gray-600">Gere links de pagamento e controle o status de todas as transações</p>
@@ -87,7 +87,7 @@ export default function Home() {
           {/* Relatórios */}
           <div className="card">
             <div className="flex items-center mb-4">
-              <TrendingUp className="w-8 h-8 text-blue-600 mr-3" />
+              <TrendingUp className="w-8 h-8 text-amber-600 mr-3" />
               <h3 className="text-xl font-bold">Relatórios</h3>
             </div>
             <p className="text-gray-600">Dashboard com gráficos, métricas e análises em tempo real</p>
@@ -96,11 +96,11 @@ export default function Home() {
       </section>
 
       {/* CTA Section */}
-      <section className="bg-blue-600 text-white py-16 mt-16">
+      <section className="bg-yellow-400 text-black py-16 mt-16">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <h2 className="text-3xl font-bold mb-4">Pronto para começar?</h2>
           <p className="text-lg mb-8">Acesse o dashboard e comece a gerenciar suas expedições</p>
-          <Link href="/dashboard" className="inline-block bg-white text-blue-600 px-8 py-3 rounded-lg font-bold hover:bg-gray-100 transition-colors">
+          <Link href="/dashboard" className="inline-block bg-white text-amber-600 px-8 py-3 rounded-lg font-bold hover:bg-gray-100 transition-colors">
             Abrir Dashboard
           </Link>
         </div>

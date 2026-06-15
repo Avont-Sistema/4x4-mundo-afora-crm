@@ -63,7 +63,7 @@ const STAGES: { key: LeadStage; label: string; color: string }[] = [
 const SOURCES: { key: LeadSource; label: string; badge: string }[] = [
   { key: 'whatsapp', label: 'WhatsApp', badge: 'bg-green-100 text-green-800' },
   { key: 'google_ads', label: 'Google Ads', badge: 'bg-red-100 text-red-800' },
-  { key: 'meta_ads', label: 'Meta Ads', badge: 'bg-blue-100 text-blue-800' },
+  { key: 'meta_ads', label: 'Meta Ads', badge: 'bg-yellow-100 text-amber-800' },
   { key: 'instagram', label: 'Instagram', badge: 'bg-pink-100 text-pink-800' },
   { key: 'website', label: 'Website', badge: 'bg-cyan-100 text-cyan-800' },
   { key: 'referral', label: 'Indicação', badge: 'bg-emerald-100 text-emerald-800' },
@@ -320,7 +320,7 @@ export default function LeadsPage() {
               onClick={() => setHandledFilter(opt)}
               className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1 ${
                 handledFilter === opt
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-yellow-400 text-black'
                   : 'bg-white text-gray-600 hover:bg-gray-50'
               }`}
             >
@@ -391,7 +391,7 @@ export default function LeadsPage() {
                           <p className="text-xs text-gray-600 mt-1.5">🎯 {lead.interest}</p>
                         )}
                         {lead.value ? (
-                          <p className="text-xs font-semibold text-blue-600 mt-1">
+                          <p className="text-xs font-semibold text-amber-600 mt-1">
                             R$ {lead.value.toLocaleString('pt-BR')}
                           </p>
                         ) : null}
@@ -410,7 +410,7 @@ export default function LeadsPage() {
                             title="Alternar IA / Manual"
                             className={`flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded ${
                               lead.handledBy === 'ia'
-                                ? 'bg-indigo-50 text-indigo-700'
+                                ? 'bg-yellow-50 text-amber-700'
                                 : 'bg-gray-50 text-gray-700'
                             }`}
                           >
@@ -427,10 +427,10 @@ export default function LeadsPage() {
                           <div className="flex gap-1">
                             <button
                               onClick={() => openEdit(lead)}
-                              className="p-1 hover:bg-blue-50 rounded"
+                              className="p-1 hover:bg-yellow-50 rounded"
                               title="Editar"
                             >
-                              <Edit2 size={14} className="text-blue-600" />
+                              <Edit2 size={14} className="text-amber-600" />
                             </button>
                             <button
                               onClick={() => removeLead(lead.id)}
@@ -603,7 +603,7 @@ function IntegrationsModal({ onClose }: { onClose: () => void }) {
       active: false,
     },
     {
-      icon: <span className="text-blue-600 font-bold text-lg">f</span>,
+      icon: <span className="text-amber-600 font-bold text-lg">f</span>,
       name: 'Meta Ads (Facebook/Instagram)',
       desc: 'Cole esta URL como Callback URL do Lead Ads no Meta Business / Gerenciador de Anúncios.',
       url: `${origin}/api/leads/webhook?source=meta_ads`,
@@ -650,7 +650,7 @@ function IntegrationsModal({ onClose }: { onClose: () => void }) {
           </div>
         ))}
       </div>
-      <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-gray-700">
+      <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-gray-700">
         💡 Dica: para proteger os webhooks, defina <code>LEADS_WEBHOOK_TOKEN</code> no{' '}
         <code>.env.local</code> e envie o mesmo valor no header{' '}
         <code>x-webhook-token</code>.

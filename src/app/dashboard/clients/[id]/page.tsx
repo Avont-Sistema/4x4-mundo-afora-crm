@@ -42,7 +42,7 @@ const relationLabel: Record<string, string> = {
 };
 
 const expStatusColor: Record<string, string> = {
-  aberta: 'bg-blue-100 text-blue-700',
+  aberta: 'bg-yellow-100 text-amber-700',
   em_andamento: 'bg-emerald-100 text-emerald-700',
   finalizada: 'bg-purple-100 text-purple-700',
   planejamento: 'bg-gray-100 text-gray-600',
@@ -94,7 +94,7 @@ export default function ClientDetailPage() {
       <div className="card mb-4">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
-            <div className="w-14 h-14 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xl font-bold">
+            <div className="w-14 h-14 rounded-full bg-yellow-100 text-amber-700 flex items-center justify-center text-xl font-bold">
               {c.name.charAt(0).toUpperCase()}
             </div>
             <div>
@@ -145,7 +145,7 @@ export default function ClientDetailPage() {
         <div className="grid grid-cols-3 gap-3 mt-4">
           <Mini label="Expedições" value={String(detail.resumo.totalExpedicoes)} />
           <Mini label="Total pago" value={formatBRL(detail.resumo.totalPago)} color="text-emerald-600" />
-          <Mini label="Saldo a pagar" value={formatBRL(detail.resumo.saldo)} color="text-blue-600" />
+          <Mini label="Saldo a pagar" value={formatBRL(detail.resumo.saldo)} color="text-amber-600" />
         </div>
       </div>
 
@@ -284,7 +284,7 @@ export default function ClientDetailPage() {
           <div className="space-y-3">
             {detail.activities.map((a: any, i: number) => (
               <div key={i} className="flex gap-3 text-sm">
-                <div className="w-2 h-2 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
+                <div className="w-2 h-2 rounded-full bg-yellow-400 mt-1.5 flex-shrink-0" />
                 <div>
                   <p>{a.text}</p>
                   <p className="text-xs text-gray-400">{formatDate(a.date)}</p>

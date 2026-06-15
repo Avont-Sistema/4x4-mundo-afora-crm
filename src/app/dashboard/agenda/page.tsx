@@ -37,7 +37,7 @@ const EVENTS_KEY = '4x4_agenda_events';
 const TODOS_KEY = '4x4_agenda_todos';
 
 const EVENT_COLORS: Record<EventType, string> = {
-  evento: 'bg-blue-500',
+  evento: 'bg-yellow-400',
   tarefa: 'bg-amber-500',
   lembrete: 'bg-purple-500',
 };
@@ -221,16 +221,16 @@ export default function AgendaPage() {
                   onClick={() => setSelectedDay(dateStr)}
                   className={`h-[72px] p-1.5 text-left flex flex-col transition-colors ${
                     isSelected
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-yellow-400 text-black'
                       : inExp.length > 0
-                        ? 'bg-blue-50 hover:bg-blue-100'
+                        ? 'bg-yellow-50 hover:bg-yellow-100'
                         : 'bg-white hover:bg-gray-50'
                   }`}
                 >
                   {/* Day number */}
                   <span className={`text-xs font-semibold w-5 h-5 flex items-center justify-center rounded-full flex-shrink-0 ${
                     isToday && !isSelected
-                      ? 'bg-blue-600 text-white text-[10px]'
+                      ? 'bg-yellow-400 text-black text-[10px]'
                       : ''
                   }`}>
                     {dayNum}
@@ -242,7 +242,7 @@ export default function AgendaPage() {
                       <span
                         key={exp.id}
                         className={`block text-[9px] truncate px-1 rounded leading-tight ${
-                          isSelected ? 'bg-blue-500 text-blue-100' : 'bg-blue-200 text-blue-800'
+                          isSelected ? 'bg-yellow-400 text-black' : 'bg-yellow-200 text-amber-800'
                         }`}
                       >
                         {exp.routeName}
@@ -256,7 +256,7 @@ export default function AgendaPage() {
                           <span
                             key={ev.id}
                             className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                              isSelected ? 'bg-blue-200' : EVENT_COLORS[ev.type]
+                              isSelected ? 'bg-yellow-200' : EVENT_COLORS[ev.type]
                             }`}
                           />
                         ))}
@@ -271,7 +271,7 @@ export default function AgendaPage() {
           {/* Legend */}
           <div className="flex flex-wrap gap-4 mt-4 text-xs text-gray-500">
             <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded bg-blue-100 border border-blue-200 inline-block" /> Expedição
+              <span className="w-3 h-3 rounded bg-yellow-100 border border-yellow-200 inline-block" /> Expedição
             </span>
             {(Object.entries(EVENT_COLORS) as [EventType, string][]).map(([t, cls]) => (
               <span key={t} className="flex items-center gap-1.5">
@@ -294,13 +294,13 @@ export default function AgendaPage() {
                   <Link
                     key={exp.id}
                     href={`/dashboard/expeditions/${exp.id}`}
-                    className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors group"
+                    className="flex items-center gap-2 p-2 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition-colors group"
                   >
-                    <MapPin size={12} className="text-blue-600 flex-shrink-0" />
+                    <MapPin size={12} className="text-amber-600 flex-shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-blue-800 truncate">{exp.routeName}</p>
+                      <p className="text-xs font-semibold text-amber-800 truncate">{exp.routeName}</p>
                       {exp.location && (
-                        <p className="text-[10px] text-blue-500 truncate">{exp.location}</p>
+                        <p className="text-[10px] text-amber-600 truncate">{exp.location}</p>
                       )}
                     </div>
                   </Link>
@@ -321,7 +321,7 @@ export default function AgendaPage() {
                     >
                       {ev.done
                         ? <CheckSquare size={15} className="text-emerald-500" />
-                        : <Square size={15} className="text-gray-400 hover:text-blue-400" />}
+                        : <Square size={15} className="text-gray-400 hover:text-amber-500" />}
                     </button>
                     <span className={`flex-1 text-sm min-w-0 truncate ${ev.done ? 'line-through text-gray-400' : ''}`}>
                       {ev.title}
@@ -405,7 +405,7 @@ export default function AgendaPage() {
                     >
                       {t.done
                         ? <CheckSquare size={15} className="text-emerald-500" />
-                        : <Square size={15} className="text-gray-400 hover:text-blue-400" />}
+                        : <Square size={15} className="text-gray-400 hover:text-amber-500" />}
                     </button>
                     <span className={`flex-1 text-sm min-w-0 ${t.done ? 'line-through text-gray-400' : 'text-gray-700'}`}>
                       {t.text}

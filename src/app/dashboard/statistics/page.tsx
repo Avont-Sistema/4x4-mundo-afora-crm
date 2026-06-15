@@ -85,8 +85,8 @@ export default function StatisticsPage() {
         <Kpi icon={<Ticket className="text-violet-600" />} label="Ticket médio" value={formatBRL(k.ticketMedio)} />
         <Kpi icon={<Gauge className="text-pink-600" />} label="Ocupação média" value={`${k.ocupacaoMedia.toFixed(0)}%`} sub={`${k.totalParticipantes}/${k.totalVagas} vagas`} />
         <Kpi icon={<Target className="text-teal-600" />} label="Conversão de leads" value={`${k.taxaConversao.toFixed(0)}%`} sub={`${k.convertidos}/${k.totalLeads}`} />
-        <Kpi icon={<Wallet className="text-blue-600" />} label="% Recebido" value={`${k.percentualRecebido.toFixed(0)}%`} sub={formatBRL(k.totalRecebido)} />
-        <Kpi icon={<Users className="text-indigo-600" />} label="Clientes" value={String(k.totalClientes)} sub={`${k.totalMatriculas} matrículas`} />
+        <Kpi icon={<Wallet className="text-amber-600" />} label="% Recebido" value={`${k.percentualRecebido.toFixed(0)}%`} sub={formatBRL(k.totalRecebido)} />
+        <Kpi icon={<Users className="text-amber-600" />} label="Clientes" value={String(k.totalClientes)} sub={`${k.totalMatriculas} matrículas`} />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
