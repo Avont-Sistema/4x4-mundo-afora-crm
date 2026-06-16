@@ -7,6 +7,8 @@ import {
   type FamilyMember,
 } from '@/lib/clientsStore';
 import { expeditionsStore, enrollClient } from '@/lib/expeditionsStore';
+import { getTermTemplate } from '@/lib/contractsStore';
+import { renderTerm, formatSignLine, TERM_VERSION } from '@/lib/imageRightsTerm';
 
 function normalizeFamily(family: any[]): FamilyMember[] {
   if (!Array.isArray(family)) return [];
@@ -30,21 +32,37 @@ function fill<T>(existing: T | undefined | null | '', incoming: T | undefined): 
   return (empty ? incoming : existing) as T | undefined;
 }
 
-// GET /api/cadastro?exp=<id> -> informações públicas mínimas da expedição (para o banner do formulário)
+// GET /api/cadastro?exp=<id> -> informações públicas da expedição (banner do formulário)
+// + o termo de uso de imagem já renderizado com os dados do evento (para a assinatura).
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const expId = searchParams.get('exp');
-  if (!expId) return NextResponse.json({ expedition: null });
-  const exp = await expeditionsStore.get(expId);
-  if (!exp) return NextResponse.json({ expedition: null });
+
+  const { template, signCity } = await getTermTemplate();
+  const exp = expId ? await expeditionsStore.get(expId) : null;
+
+  const term = {
+    text: renderTerm(template, {
+      eventName: exp?.routeName,
+      startDate: exp?.startDate,
+      endDate: exp?.endDate,
+      location: exp?.location,
+    }),
+    signLine: formatSignLine(signCity),
+    version: TERM_VERSION,
+  };
+
   return NextResponse.json({
-    expedition: {
-      id: exp.id,
-      routeName: exp.routeName,
-      location: exp.location,
-      startDate: exp.startDate,
-      endDate: exp.endDate,
-    },
+    expedition: exp
+      ? {
+          id: exp.id,
+          routeName: exp.routeName,
+          location: exp.location,
+          startDate: exp.startDate,
+          endDate: exp.endDate,
+        }
+      : null,
+    term,
   });
 }
 

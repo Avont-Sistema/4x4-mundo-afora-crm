@@ -23,9 +23,13 @@ import {
   Unlock,
   Download,
   FileSpreadsheet,
+  Upload,
+  FileText,
+  Loader,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatBRL, formatDate } from '@/lib/format';
+import { generateContractPdf } from '@/lib/contractPdf';
 
 // ---- tipos (resumidos do detail do backend) ----
 interface Payment { id: string; date: string; amount: number; method: string; description?: string }
@@ -310,11 +314,13 @@ function ClientsTab({
   onOpen: (id: string) => void;
 }) {
   const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [clients, setClients] = useState<ClientLite[]>([]);
   const [clientId, setClientId] = useState('');
   const [adults, setAdults] = useState(1);
   const [children, setChildren] = useState(0);
   const [price, setPrice] = useState('');
+  const [contracts, setContracts] = useState<Record<string, { id: string; signedAt: string }>>({});
 
   useEffect(() => {
     if (showAdd) {
@@ -323,6 +329,41 @@ function ClientsTab({
         .then((d) => setClients(d.clients || []));
     }
   }, [showAdd]);
+
+  const loadContracts = useCallback(() => {
+    fetch(`/api/contracts?expeditionId=${exp.id}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const map: Record<string, { id: string; signedAt: string }> = {};
+        (d.contracts || []).forEach((c: any) => {
+          map[c.clientId] = { id: c.id, signedAt: c.signedAt };
+        });
+        setContracts(map);
+      })
+      .catch(() => {});
+  }, [exp.id]);
+
+  useEffect(() => { loadContracts(); }, [loadContracts]);
+
+  const downloadContract = async (contractId: string) => {
+    try {
+      const r = await fetch(`/api/contracts/${contractId}`);
+      const d = await r.json();
+      if (!r.ok || !d.contract) throw new Error('Contrato não encontrado');
+      generateContractPdf(d.contract);
+    } catch {
+      toast.error('Erro ao baixar contrato');
+    }
+  };
+
+  const handleImported = async () => {
+    setShowImport(false);
+    try {
+      const r = await fetch(`/api/expeditions/${exp.id}`);
+      onApply(await r.json());
+    } catch { /* ignore */ }
+    loadContracts();
+  };
 
   const suggestedPrice = adults * exp.pricePerPerson + children * exp.pricePerChild;
 
@@ -357,46 +398,68 @@ function ClientsTab({
 
   return (
     <div>
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-end gap-2 mb-4">
+        <button onClick={() => setShowImport(true)} className="btn btn-secondary flex items-center gap-2">
+          <Upload size={18} /> Importar planilha
+        </button>
         <button onClick={() => setShowAdd(true)} className="btn btn-primary flex items-center gap-2">
           <UserPlus size={18} /> Adicionar Cliente
         </button>
       </div>
 
       <div className="space-y-3">
-        {exp.enrollments.map((e) => (
-          <button
-            key={e.id}
-            onClick={() => onOpen(e.id)}
-            className="card w-full text-left hover:shadow-md transition-shadow flex items-center gap-4"
-          >
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="font-semibold">{e.clientName}</p>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full ${enrollmentStatusColor[e.status]}`}>
-                  {e.status}
+        {exp.enrollments.map((e) => {
+          const contract = contracts[e.clientId];
+          return (
+            <div key={e.id} className="flex items-center gap-2">
+              <button
+                onClick={() => onOpen(e.id)}
+                className="card flex-1 min-w-0 text-left hover:shadow-md transition-shadow flex items-center gap-4"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold">{e.clientName}</p>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${enrollmentStatusColor[e.status]}`}>
+                      {e.status}
+                    </span>
+                    {contract && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center gap-1">
+                        <FileText size={10} /> termo assinado
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {e.adults} adulto(s){e.children > 0 ? ` · ${e.children} criança(s)` : ''} ·{' '}
+                    Valor {formatBRL(e.agreedPrice)}
+                  </p>
+                </div>
+                <div className="w-40">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-emerald-600 font-medium">{formatBRL(e.paid)}</span>
+                    <span className="text-gray-400">{e.progress.toFixed(0)}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
+                    <div className="bg-emerald-500 h-full" style={{ width: `${Math.min(e.progress, 100)}%` }} />
+                  </div>
+                </div>
+                <ChevronRight size={18} className="text-gray-300" />
+              </button>
+              {contract ? (
+                <button
+                  onClick={() => downloadContract(contract.id)}
+                  title="Baixar contrato (termo de uso de imagem) assinado"
+                  className="p-2.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 flex-shrink-0"
+                >
+                  <Download size={16} />
+                </button>
+              ) : (
+                <span title="Termo de imagem ainda não assinado" className="p-2.5 text-gray-300 flex-shrink-0">
+                  <FileText size={16} />
                 </span>
-              </div>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {e.adults} adulto(s){e.children > 0 ? ` · ${e.children} criança(s)` : ''} ·{' '}
-                Valor {formatBRL(e.agreedPrice)}
-              </p>
+              )}
             </div>
-            <div className="w-40">
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-emerald-600 font-medium">{formatBRL(e.paid)}</span>
-                <span className="text-gray-400">{e.progress.toFixed(0)}%</span>
-              </div>
-              <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
-                <div
-                  className="bg-emerald-500 h-full"
-                  style={{ width: `${Math.min(e.progress, 100)}%` }}
-                />
-              </div>
-            </div>
-            <ChevronRight size={18} className="text-gray-300" />
-          </button>
-        ))}
+          );
+        })}
         {exp.enrollments.length === 0 && (
           <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
             Nenhum cliente nesta expedição ainda.
@@ -469,7 +532,160 @@ function ClientsTab({
           </div>
         </ModalShell>
       )}
+
+      {showImport && (
+        <ImportPlanModal
+          expId={exp.id}
+          onClose={() => setShowImport(false)}
+          onImported={handleImported}
+        />
+      )}
     </div>
+  );
+}
+
+// ===========================================================================
+// Modal: Importar planilha de Controle Interno (.xlsx)
+// ===========================================================================
+interface ImportPreviewComitiva {
+  driverName: string;
+  cpf?: string;
+  car?: string;
+  plate?: string;
+  adults: number;
+  children: number;
+  companions: { name: string; isChild: boolean; age?: number }[];
+  existing: boolean;
+}
+
+function ImportPlanModal({
+  expId,
+  onClose,
+  onImported,
+}: {
+  expId: string;
+  onClose: () => void;
+  onImported: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [preview, setPreview] = useState<{
+    totalPeople: number;
+    totalCars: number;
+    comitivas: ImportPreviewComitiva[];
+    warnings: string[];
+  } | null>(null);
+
+  const send = async (mode: 'preview' | 'confirm') => {
+    if (!file) { toast.error('Selecione o arquivo .xlsx'); return; }
+    const setBusy = mode === 'preview' ? setLoading : setImporting;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(
+        `/api/expeditions/${expId}/import${mode === 'preview' ? '?preview=1' : ''}`,
+        { method: 'POST', body: fd }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Falha ao processar planilha');
+
+      if (mode === 'preview') {
+        setPreview({
+          totalPeople: data.totalPeople,
+          totalCars: data.totalCars,
+          comitivas: data.comitivas,
+          warnings: data.warnings || [],
+        });
+      } else {
+        toast.success(
+          `Importado: ${data.created} novo(s), ${data.merged} atualizado(s), ${data.enrolled} matriculado(s)` +
+            (data.skipped ? ` · ${data.skipped} já estavam na expedição` : '')
+        );
+        onImported();
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Erro na importação');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const newCount = preview?.comitivas.filter((c) => !c.existing).length ?? 0;
+  const existingCount = preview?.comitivas.filter((c) => c.existing).length ?? 0;
+
+  return (
+    <ModalShell title="Importar planilha de Controle Interno" onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-sm text-gray-500">
+          Selecione o arquivo <strong>.xlsx</strong> de controle interno. O sistema lê a aba{' '}
+          <strong>CONTROLE</strong>, agrupa cada carro (motorista + acompanhantes), identifica
+          crianças e cadastra/matricula automaticamente nesta expedição.
+        </p>
+
+        <input
+          type="file"
+          accept=".xlsx,.xls"
+          onChange={(e) => { setFile(e.target.files?.[0] || null); setPreview(null); }}
+          className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gray-900 file:text-white file:text-sm file:font-semibold hover:file:bg-black"
+        />
+
+        {!preview && (
+          <button
+            onClick={() => send('preview')}
+            disabled={!file || loading}
+            className="btn btn-primary flex items-center gap-2"
+          >
+            {loading ? <Loader size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
+            {loading ? 'Analisando...' : 'Analisar planilha'}
+          </button>
+        )}
+
+        {preview && (
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-3 text-sm">
+              <span className="px-3 py-1 rounded-full bg-gray-100 font-medium">{preview.totalCars} carro(s)</span>
+              <span className="px-3 py-1 rounded-full bg-gray-100 font-medium">{preview.totalPeople} pessoa(s)</span>
+              <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 font-medium">{newCount} novo(s)</span>
+              <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 font-medium">{existingCount} já cadastrado(s)</span>
+            </div>
+
+            {preview.warnings.length > 0 && (
+              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                {preview.warnings.map((w, i) => <p key={i}>⚠ {w}</p>)}
+              </div>
+            )}
+
+            <div className="max-h-72 overflow-y-auto border border-gray-100 rounded-lg divide-y divide-gray-100">
+              {preview.comitivas.map((c, i) => (
+                <div key={i} className="p-3 text-sm">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold">{i + 1}. {c.driverName}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${c.existing ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      {c.existing ? 'já cadastrado' : 'novo'}
+                    </span>
+                    <span className="text-xs text-gray-400">{c.adults}A{c.children > 0 ? ` · ${c.children}C` : ''}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {c.car || 'carro não informado'}{c.plate ? ` · ${c.plate}` : ''}
+                    {c.companions.length > 0 && <> · {c.companions.map((p) => p.name).join(', ')}</>}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <button onClick={() => send('confirm')} disabled={importing} className="btn btn-primary flex items-center gap-2">
+                {importing ? <Loader size={16} className="animate-spin" /> : <Check size={16} />}
+                {importing ? 'Importando...' : `Confirmar importação (${preview.totalCars})`}
+              </button>
+              <button onClick={() => setPreview(null)} className="btn btn-secondary">Trocar arquivo</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </ModalShell>
   );
 }
 

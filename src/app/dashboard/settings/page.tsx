@@ -14,8 +14,11 @@ import {
   XCircle,
   Loader,
   ExternalLink,
+  FileSignature,
+  RotateCcw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { DEFAULT_IMAGE_RIGHTS_TERM, DEFAULT_SIGN_CITY } from '@/lib/imageRightsTerm';
 
 type FieldMeta = { value: string; set: boolean; secret: boolean; fromEnv: boolean };
 type View = Record<string, FieldMeta>;
@@ -27,6 +30,38 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [origin, setOrigin] = useState('');
   const [tests, setTests] = useState<Record<string, { ok: boolean; message: string } | 'loading'>>({});
+
+  // Termo de uso de imagem (template editável)
+  const [termTemplate, setTermTemplate] = useState('');
+  const [signCity, setSignCity] = useState('');
+  const [termSaving, setTermSaving] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/contract-template')
+      .then((r) => r.json())
+      .then((d) => {
+        setTermTemplate(d.template || '');
+        setSignCity(d.signCity || '');
+      })
+      .catch(() => {});
+  }, []);
+
+  const saveTerm = async () => {
+    setTermSaving(true);
+    try {
+      const res = await fetch('/api/contract-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template: termTemplate, signCity }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Termo salvo');
+    } catch {
+      toast.error('Erro ao salvar termo');
+    } finally {
+      setTermSaving(false);
+    }
+  };
 
   const load = useCallback(async () => {
     const res = await fetch('/api/integrations');
@@ -285,6 +320,48 @@ export default function SettingsPage() {
             <Field k="smtpPort" label="Porta" placeholder="587" />
             <Field k="smtpUser" label="Usuário" placeholder="seu@email.com" />
             <Field k="smtpPassword" label="Senha" type="password" />
+          </div>
+        </section>
+
+        {/* Termo de uso de imagem */}
+        <section className="card">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <FileSignature className="text-gray-700" size={20} />
+              <h2 className="text-lg font-bold">Termo de Uso de Imagem</h2>
+            </div>
+            <button
+              onClick={() => { setTermTemplate(DEFAULT_IMAGE_RIGHTS_TERM); setSignCity(DEFAULT_SIGN_CITY); }}
+              className="text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1"
+            >
+              <RotateCcw size={13} /> Restaurar padrão
+            </button>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">
+            Texto que o cliente assina ao final do cadastro. Use os marcadores{' '}
+            <code className="bg-gray-100 px-1 rounded">{'{EVENT_NAME}'}</code>,{' '}
+            <code className="bg-gray-100 px-1 rounded">{'{EVENT_DATES}'}</code> e{' '}
+            <code className="bg-gray-100 px-1 rounded">{'{EVENT_LOCATION_SUFFIX}'}</code> — eles são
+            preenchidos automaticamente com os dados de cada expedição.
+          </p>
+          <div className="mb-4 max-w-xs">
+            <label className="text-xs text-gray-500">Cidade de assinatura</label>
+            <input
+              className="input mt-1"
+              placeholder="Ex: Capão Alto/SC"
+              value={signCity}
+              onChange={(e) => setSignCity(e.target.value)}
+            />
+          </div>
+          <textarea
+            className="input w-full h-72 font-mono text-xs leading-relaxed resize-y"
+            value={termTemplate}
+            onChange={(e) => setTermTemplate(e.target.value)}
+          />
+          <div className="mt-3">
+            <button onClick={saveTerm} disabled={termSaving} className="btn btn-primary flex items-center gap-2">
+              <Save size={16} /> {termSaving ? 'Salvando...' : 'Salvar termo'}
+            </button>
           </div>
         </section>
 
