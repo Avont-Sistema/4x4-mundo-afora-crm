@@ -30,6 +30,7 @@ function normalizeFamily(family: any[]): FamilyMember[] {
     weight: m.weight ? Number(m.weight) : undefined,
     height: m.height ? Number(m.height) : undefined,
     shirtSize: m.shirtSize,
+    priceCategory: m.priceCategory || undefined,
   }));
 }
 
@@ -58,6 +59,7 @@ export async function POST(request: NextRequest) {
       height: body.height ? Number(body.height) : undefined,
       shirtSizes: body.shirtSizes,
       roomConfig: body.roomConfig,
+      priceCategory: body.priceCategory || undefined,
       emergencyContact: body.emergencyContact,
       petInfo: body.petInfo,
       family: normalizeFamily(body.family),

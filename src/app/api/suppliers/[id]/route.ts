@@ -8,7 +8,7 @@ export async function PATCH(
   try {
     const { id } = await params;
     const patch = await request.json();
-    ['costPerPerson', 'costPerChild', 'costPerCar', 'costPerRoom', 'flatFee', 'rating'].forEach((k) => {
+    ['costPerPerson', 'costPerChild', 'costPerStudent', 'costPerSenior', 'childMaxAge', 'seniorMinAge', 'costPerCar', 'costPerRoom', 'flatFee', 'rating'].forEach((k) => {
       if (patch[k] !== undefined) patch[k] = Number(patch[k]);
     });
     const supplier = await suppliersStore.update(id, patch);

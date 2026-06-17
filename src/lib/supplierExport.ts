@@ -1,5 +1,12 @@
 import { clientsStore } from './clientsStore';
-import { type Supplier, supplierCost, type SupplierCostContext } from './suppliersStore';
+import {
+  type Supplier,
+  supplierCost,
+  type SupplierCostContext,
+  resolveCategory,
+  categoryPrice,
+  PRICE_CATEGORY_LABELS,
+} from './suppliersStore';
 import { type Expedition } from './expeditionsStore';
 import {
   BILLING_LABELS,
@@ -65,6 +72,7 @@ export async function buildExportRows(exp: Expedition): Promise<PersonRow[]> {
       shirt: (c.shirtSizes || []).join(' / '),
       notes: c.notes || '',
       isChild: false,
+      priceCategory: c.priceCategory,
       ...shared,
     });
 
@@ -79,6 +87,7 @@ export async function buildExportRows(exp: Expedition): Promise<PersonRow[]> {
         shirt: m.shirtSize || '',
         notes: '',
         isChild: Boolean(m.isChild),
+        priceCategory: m.priceCategory,
         ...shared,
       });
     }
@@ -124,28 +133,53 @@ export async function buildSupplierCSV(
 
   const rows = await buildExportRows(exp);
   const ctx = costContext(exp);
-  const total = supplierCost(supplier, ctx);
+
+  // No modo "por pessoa", mostramos o valor que cada um paga (por categoria) e
+  // o total = soma das linhas. Nos demais modos, o total segue a regra do modo.
+  const perPerson = !supplier.billingMode || supplier.billingMode === 'per_person';
+  const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  const rowValue = (r: (typeof rows)[number]): { category: string; value: number } => {
+    const cat = resolveCategory(supplier, {
+      priceCategory: r.priceCategory,
+      age: r.age ? Number(r.age) : null,
+      isChild: r.isChild,
+    });
+    return { category: PRICE_CATEGORY_LABELS[cat], value: categoryPrice(supplier, cat) };
+  };
+
+  let total = supplierCost(supplier, ctx);
+  if (perPerson) total = rows.reduce((sum, r) => sum + rowValue(r).value, 0);
 
   const lines: string[] = [];
   // Cabeçalho de identificação
   lines.push([csvCell(`Fornecedor: ${supplier.name}`)].join(';'));
   lines.push([csvCell(`Expedição: ${exp.routeName}`)].join(';'));
   lines.push('');
-  // Cabeçalho de colunas
-  lines.push(cols.map((c) => csvCell(c.label)).join(';'));
+  // Cabeçalho de colunas (+ Categoria/Valor quando por pessoa)
+  const header = cols.map((c) => c.label);
+  if (perPerson) header.push('Categoria', 'Valor (R$)');
+  lines.push(header.map(csvCell).join(';'));
   // Linhas de pessoas
   for (const r of rows) {
-    lines.push(cols.map((c) => csvCell(String(r[c.id] ?? ''))).join(';'));
+    const cells = cols.map((c) => String(r[c.id] ?? ''));
+    if (perPerson) {
+      const { category, value } = rowValue(r);
+      cells.push(category, brl(value));
+    }
+    lines.push(cells.map(csvCell).join(';'));
   }
   // Totais
   lines.push('');
   lines.push([csvCell('Total de pessoas:'), csvCell(String(rows.length))].join(';'));
   lines.push(
     [
-      csvCell(`Valor total a pagar (${BILLING_LABELS[supplier.billingMode] || 'por pessoa'}):`),
       csvCell(
-        total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        perPerson
+          ? 'Valor total a pagar (soma por pessoa):'
+          : `Valor total a pagar (${BILLING_LABELS[supplier.billingMode] || 'por pessoa'}):`
       ),
+      csvCell(brl(total)),
     ].join(';')
   );
 

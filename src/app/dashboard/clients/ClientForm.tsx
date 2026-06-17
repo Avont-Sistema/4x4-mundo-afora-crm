@@ -4,6 +4,18 @@ import { useState } from 'react';
 import { X, UserPlus, Car, Briefcase, Users, Trash2, Phone, Shirt } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+type PriceCategory = '' | 'adulto' | 'crianca' | 'estudante' | 'idoso';
+
+const ADULT_SHIRTS = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'G1', 'G2', 'G3'];
+const INFANTIL_SHIRTS = ['02', '04', '06', '08', '10', '12', '14'];
+const PRICE_CATEGORIES: { value: PriceCategory; label: string }[] = [
+  { value: '', label: 'Automático (idade)' },
+  { value: 'adulto', label: 'Adulto' },
+  { value: 'crianca', label: 'Criança' },
+  { value: 'estudante', label: 'Estudante' },
+  { value: 'idoso', label: 'Idoso' },
+];
+
 interface FamilyMember {
   id?: string;
   name: string;
@@ -12,6 +24,7 @@ interface FamilyMember {
   isChild: boolean;
   weight?: number | string;
   height?: number | string;
+  priceCategory?: PriceCategory;
 }
 
 export interface ClientInitial {
@@ -24,6 +37,7 @@ export interface ClientInitial {
   weight?: number | string;
   height?: number | string;
   shirtSizes?: string[];
+  priceCategory?: PriceCategory;
   address?: string;
   addressNumber?: string;
   neighborhood?: string;
@@ -58,6 +72,7 @@ export default function ClientForm({
     weight: initial?.weight ?? '',
     height: initial?.height ?? '',
     shirtSize: initial?.shirtSizes?.[0] || '',
+    priceCategory: (initial?.priceCategory || '') as PriceCategory,
     address: initial?.address || '',
     addressNumber: initial?.addressNumber || '',
     neighborhood: initial?.neighborhood || '',
@@ -96,6 +111,7 @@ export default function ClientForm({
       ...rest,
       whatsapp: form.phone,
       shirtSizes: shirtSize ? [shirtSize] : [],
+      priceCategory: form.priceCategory || undefined,
       emergencyContact: form.emergencyContact?.name ? form.emergencyContact : undefined,
     };
     try {
@@ -148,7 +164,18 @@ export default function ClientForm({
                 <label className="text-xs text-gray-500 flex items-center gap-1"><Shirt size={11} /> Camiseta</label>
                 <select className="input" value={form.shirtSize} onChange={(e) => setForm({ ...form, shirtSize: e.target.value })}>
                   <option value="">—</option>
-                  {['PP','P','M','G','GG','XG','XXG'].map((s) => <option key={s} value={s}>{s}</option>)}
+                  <optgroup label="Adulto">
+                    {ADULT_SHIRTS.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </optgroup>
+                  <optgroup label="Infantil">
+                    {INFANTIL_SHIRTS.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </optgroup>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Categoria (tarifário)</label>
+                <select className="input" value={form.priceCategory} onChange={(e) => setForm({ ...form, priceCategory: e.target.value as PriceCategory })}>
+                  {PRICE_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
               </div>
             </div>
@@ -211,10 +238,18 @@ export default function ClientForm({
                   <button onClick={() => removeMember(i)} className="col-span-1 p-1 hover:bg-rose-100 rounded justify-self-center">
                     <Trash2 size={14} className="text-rose-500" />
                   </button>
-                  <label className="col-span-12 flex items-center gap-1 text-xs text-gray-500 pl-1">
-                    <input type="checkbox" checked={m.isChild} onChange={(e) => updateMember(i, { isChild: e.target.checked })} />
-                    Conta como criança (preço/custo)
-                  </label>
+                  <div className="col-span-12 flex flex-wrap items-center gap-x-4 gap-y-1 pl-1">
+                    <label className="flex items-center gap-1 text-xs text-gray-500">
+                      <input type="checkbox" checked={m.isChild} onChange={(e) => updateMember(i, { isChild: e.target.checked })} />
+                      Conta como criança (preço/custo)
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-gray-500">
+                      Categoria:
+                      <select className="input !py-1 !text-xs !w-auto" value={m.priceCategory || ''} onChange={(e) => updateMember(i, { priceCategory: e.target.value as PriceCategory })}>
+                        {PRICE_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                      </select>
+                    </label>
+                  </div>
                 </div>
               ))}
               {form.family.length === 0 && <p className="text-xs text-gray-400">Nenhum familiar adicionado.</p>}

@@ -1,6 +1,8 @@
 // Constantes/tipos puros (sem acesso a fs) — podem ser importados tanto no
 // servidor quanto em componentes client ('use client').
 
+import type { PriceCategory } from './clientsStore';
+
 export type BillingMode = 'per_person' | 'per_car' | 'flat' | 'per_room';
 
 export const BILLING_LABELS: Record<BillingMode, string> = {
@@ -31,6 +33,7 @@ export interface PersonRow {
   responsible: string;
   notes: string;
   isChild: boolean;
+  priceCategory?: PriceCategory; // categoria manual de tarifário (sobrepõe idade)
 }
 
 // Campos que cada fornecedor pode escolher exportar

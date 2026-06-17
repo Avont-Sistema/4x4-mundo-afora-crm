@@ -2,6 +2,10 @@ import { createCollection, type BaseRecord } from './jsonCollection';
 
 export type FamilyRelation = 'conjuge' | 'filho' | 'filha' | 'outro';
 
+// Categoria de preço/tarifário (ingressos do fornecedor). Quando ausente,
+// o sistema deduz por idade (criança/idoso pela faixa do fornecedor; senão adulto).
+export type PriceCategory = 'adulto' | 'crianca' | 'estudante' | 'idoso';
+
 export interface FamilyMember {
   id: string;
   name: string;
@@ -13,6 +17,7 @@ export interface FamilyMember {
   weight?: number; // kg
   height?: number; // cm
   shirtSize?: string;
+  priceCategory?: PriceCategory; // sobrepõe a dedução por idade na planilha do fornecedor
 }
 
 export interface Vehicle {
@@ -41,6 +46,7 @@ export interface Client extends BaseRecord {
   height?: number; // cm
   shirtSizes?: string[]; // tamanhos da comitiva inteira
   roomConfig?: string;  // configuração do quarto
+  priceCategory?: PriceCategory; // categoria de tarifário do titular (sobrepõe idade)
   emergencyContact?: { name: string; phone: string };
   petInfo?: string;
   family: FamilyMember[];

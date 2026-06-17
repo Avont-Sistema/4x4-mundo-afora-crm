@@ -16,6 +16,10 @@ interface Supplier {
   billingMode: BillingMode;
   costPerPerson: number;
   costPerChild: number;
+  costPerStudent?: number;
+  costPerSenior?: number;
+  childMaxAge?: number;
+  seniorMinAge?: number;
   costPerCar: number;
   costPerRoom: number;
   flatFee: number;
@@ -42,6 +46,10 @@ const emptyForm = {
   billingMode: 'per_person' as BillingMode,
   costPerPerson: 0,
   costPerChild: 0,
+  costPerStudent: 0,
+  costPerSenior: 0,
+  childMaxAge: 12,
+  seniorMinAge: 60,
   costPerCar: 0,
   costPerRoom: 0,
   flatFee: 0,
@@ -91,6 +99,10 @@ export default function SuppliersPage() {
       billingMode: s.billingMode || 'per_person',
       costPerPerson: s.costPerPerson || 0,
       costPerChild: s.costPerChild || 0,
+      costPerStudent: s.costPerStudent || 0,
+      costPerSenior: s.costPerSenior || 0,
+      childMaxAge: s.childMaxAge ?? 12,
+      seniorMinAge: s.seniorMinAge ?? 60,
       costPerCar: s.costPerCar || 0,
       costPerRoom: s.costPerRoom || 0,
       flatFee: s.flatFee || 0,
@@ -192,7 +204,9 @@ export default function SuppliersPage() {
                   {(!s.billingMode || s.billingMode === 'per_person') && (
                     <>
                       <CostChip label="Adulto" value={s.costPerPerson} />
-                      <CostChip label="Criança" value={s.costPerChild} />
+                      <CostChip label={`Criança (≤${s.childMaxAge ?? 12})`} value={s.costPerChild} />
+                      {(s.costPerStudent ?? 0) > 0 && <CostChip label="Estudante" value={s.costPerStudent || 0} />}
+                      {(s.costPerSenior ?? 0) > 0 && <CostChip label={`Idoso (≥${s.seniorMinAge ?? 60})`} value={s.costPerSenior || 0} />}
                     </>
                   )}
                   {s.billingMode === 'per_car' && <CostChip label="Por carro" value={s.costPerCar} />}
@@ -283,16 +297,45 @@ export default function SuppliersPage() {
                 <div className="grid grid-cols-2 gap-3 mt-3">
                   {form.billingMode === 'per_person' && (
                     <>
+                      <div className="col-span-2">
+                        <p className="text-[11px] text-gray-400 mb-1">
+                          Tarifário por categoria (idades, valores e ingressos)
+                        </p>
+                      </div>
                       <div>
-                        <label className="text-xs text-gray-500">Custo por adulto (R$)</label>
+                        <label className="text-xs text-gray-500">Adulto (R$)</label>
                         <input type="number" className="input" value={form.costPerPerson}
                           onChange={(e) => setForm({ ...form, costPerPerson: Number(e.target.value) })} />
                       </div>
                       <div>
-                        <label className="text-xs text-gray-500">Custo por criança (R$)</label>
+                        <label className="text-xs text-gray-500">Criança (R$)</label>
                         <input type="number" className="input" value={form.costPerChild}
                           onChange={(e) => setForm({ ...form, costPerChild: Number(e.target.value) })} />
                       </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Estudante (R$)</label>
+                        <input type="number" className="input" value={form.costPerStudent}
+                          onChange={(e) => setForm({ ...form, costPerStudent: Number(e.target.value) })} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Idoso (R$)</label>
+                        <input type="number" className="input" value={form.costPerSenior}
+                          onChange={(e) => setForm({ ...form, costPerSenior: Number(e.target.value) })} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Criança: idade até (anos)</label>
+                        <input type="number" min={0} className="input" value={form.childMaxAge}
+                          onChange={(e) => setForm({ ...form, childMaxAge: Number(e.target.value) })} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Idoso: idade a partir de (anos)</label>
+                        <input type="number" min={0} className="input" value={form.seniorMinAge}
+                          onChange={(e) => setForm({ ...form, seniorMinAge: Number(e.target.value) })} />
+                      </div>
+                      <p className="col-span-2 text-[11px] text-gray-400">
+                        Criança e idoso são aplicados automaticamente pela idade. Estudante é definido
+                        manualmente no cadastro do cliente.
+                      </p>
                     </>
                   )}
                   {form.billingMode === 'per_car' && (

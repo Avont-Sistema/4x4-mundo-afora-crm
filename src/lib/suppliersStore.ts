@@ -1,5 +1,6 @@
 import { createCollection, type BaseRecord } from './jsonCollection';
 import { type BillingMode, BILLING_LABELS } from './supplierFields';
+import type { PriceCategory } from './clientsStore';
 
 // re-exporta para manter compatibilidade com quem importa daqui
 export { BILLING_LABELS };
@@ -23,6 +24,10 @@ export interface Supplier extends BaseRecord {
   billingMode: BillingMode;
   costPerPerson: number; // custo por adulto (modo per_person)
   costPerChild: number; // custo por criança (modo per_person)
+  costPerStudent?: number; // custo por estudante (modo per_person)
+  costPerSenior?: number; // custo por idoso (modo per_person)
+  childMaxAge?: number; // criança: idade até (anos). Default 12
+  seniorMinAge?: number; // idoso: idade a partir de (anos). Default 60
   costPerCar: number; // custo por carro (modo per_car)
   costPerRoom: number; // custo por quarto (modo per_room)
   flatFee: number; // valor fixo da expedição (modo flat)
@@ -38,6 +43,48 @@ export interface SupplierCostContext {
   children: number;
   cars: number; // nº de matrículas (carros) ativas
   rooms: number; // nº de quartos reservados (simplificado: 1 por matrícula)
+}
+
+export const DEFAULT_CHILD_MAX_AGE = 12;
+export const DEFAULT_SENIOR_MIN_AGE = 60;
+
+export const PRICE_CATEGORY_LABELS: Record<PriceCategory, string> = {
+  adulto: 'Adulto',
+  crianca: 'Criança',
+  estudante: 'Estudante',
+  idoso: 'Idoso',
+};
+
+// Preço do tarifário (modo per_person) para uma categoria
+export function categoryPrice(s: Supplier, cat: PriceCategory): number {
+  switch (cat) {
+    case 'crianca':
+      return s.costPerChild || 0;
+    case 'estudante':
+      return s.costPerStudent || 0;
+    case 'idoso':
+      return s.costPerSenior || 0;
+    case 'adulto':
+    default:
+      return s.costPerPerson || 0;
+  }
+}
+
+// Resolve a categoria de uma pessoa: usa a categoria manual se houver; senão
+// deduz por idade (criança até childMaxAge, idoso a partir de seniorMinAge).
+export function resolveCategory(
+  s: Supplier,
+  opts: { priceCategory?: PriceCategory; age?: number | null; isChild?: boolean }
+): PriceCategory {
+  if (opts.priceCategory) return opts.priceCategory;
+  if (opts.isChild) return 'crianca';
+  const childMax = s.childMaxAge ?? DEFAULT_CHILD_MAX_AGE;
+  const seniorMin = s.seniorMinAge ?? DEFAULT_SENIOR_MIN_AGE;
+  if (opts.age != null && !Number.isNaN(opts.age)) {
+    if (opts.age <= childMax) return 'crianca';
+    if (opts.age >= seniorMin) return 'idoso';
+  }
+  return 'adulto';
 }
 
 // Quanto se deve a um fornecedor numa expedição, conforme a regra de pagamento dele

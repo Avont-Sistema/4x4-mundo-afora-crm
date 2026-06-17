@@ -26,6 +26,7 @@ import {
   Upload,
   FileText,
   Loader,
+  Pencil,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatBRL, formatDate } from '@/lib/format';
@@ -52,7 +53,7 @@ interface SupplierBilling {
   billingLabel: string; exportFieldCount: number; amount: number;
 }
 interface Expedition {
-  id: string; routeName: string; description?: string; location?: string;
+  id: string; routeName: string; sector?: string; description?: string; location?: string;
   startDate?: string; endDate?: string; slots: number; pricePerPerson: number;
   pricePerChild: number; revenueGoal: number; status: string; closedAt?: string; supplierIds: string[];
   suppliers: Supplier[]; manualCosts: ManualCost[]; enrollments: Enrollment[];
@@ -89,6 +90,7 @@ export default function ExpeditionDetailPage() {
   const [tab, setTab] = useState<'clientes' | 'fornecedores' | 'custos' | 'fechamento'>('clientes');
   const [selectedEnrollment, setSelectedEnrollment] = useState<string | null>(null);
   const [showLink, setShowLink] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -110,6 +112,18 @@ export default function ExpeditionDetailPage() {
   const apply = (data: { expedition?: Expedition; error?: string }) => {
     if (data.expedition) setExp(data.expedition);
     else if (data.error) toast.error(data.error);
+  };
+
+  const removeExpedition = async () => {
+    if (!exp) return;
+    if (!confirm(`Excluir a expedição "${exp.routeName}"? Esta ação não pode ser desfeita.`)) return;
+    const res = await fetch(`/api/expeditions/${exp.id}`, { method: 'DELETE' });
+    if (res.ok) {
+      toast.success('Expedição excluída');
+      router.push('/dashboard/expeditions');
+    } else {
+      toast.error('Erro ao excluir');
+    }
   };
 
   if (loading) {
@@ -146,12 +160,20 @@ export default function ExpeditionDetailPage() {
             {f.cars}/{exp.slots} carros · {f.totalParticipants} pessoas
           </p>
         </div>
-        <button
-          onClick={() => setShowLink(true)}
-          className="btn btn-secondary flex items-center gap-2"
-        >
-          <Link2 size={16} /> Link de Formulário
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => setShowEdit(true)} className="btn btn-secondary flex items-center gap-2">
+            <Pencil size={16} /> Editar
+          </button>
+          <button onClick={() => setShowLink(true)} className="btn btn-secondary flex items-center gap-2">
+            <Link2 size={16} /> Link de Formulário
+          </button>
+          <button
+            onClick={removeExpedition}
+            className="btn flex items-center gap-2 bg-rose-50 text-rose-600 hover:bg-rose-100"
+          >
+            <Trash2 size={16} /> Excluir
+          </button>
+        </div>
       </div>
 
       {/* cabeçalho financeiro */}
@@ -241,7 +263,118 @@ export default function ExpeditionDetailPage() {
 
       {/* Modal: link do formulário de inscrição desta expedição */}
       {showLink && <FormLinkModal expId={exp.id} expName={exp.routeName} onClose={() => setShowLink(false)} />}
+
+      {/* Modal: editar dados da expedição */}
+      {showEdit && (
+        <EditExpeditionModal
+          exp={exp}
+          onClose={() => setShowEdit(false)}
+          onSaved={(d) => { apply(d); setShowEdit(false); }}
+        />
+      )}
     </div>
+  );
+}
+
+// ===========================================================================
+// Modal: Editar Expedição
+// ===========================================================================
+function EditExpeditionModal({
+  exp,
+  onClose,
+  onSaved,
+}: {
+  exp: Expedition;
+  onClose: () => void;
+  onSaved: (d: { expedition?: Expedition; error?: string }) => void;
+}) {
+  const [form, setForm] = useState({
+    routeName: exp.routeName || '',
+    sector: exp.sector || '',
+    description: exp.description || '',
+    location: exp.location || '',
+    startDate: (exp.startDate || '').slice(0, 10),
+    endDate: (exp.endDate || '').slice(0, 10),
+    slots: exp.slots ?? 0,
+    pricePerPerson: exp.pricePerPerson ?? 0,
+    pricePerChild: exp.pricePerChild ?? 0,
+    revenueGoal: exp.revenueGoal ?? 0,
+    status: exp.status || 'planejamento',
+  });
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (!form.routeName.trim()) { toast.error('Informe o nome da rota'); return; }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/expeditions/${exp.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...form,
+          startDate: form.startDate || undefined,
+          endDate: form.endDate || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao salvar');
+      toast.success('Expedição atualizada');
+      onSaved(data);
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao salvar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const num = (k: 'slots' | 'pricePerPerson' | 'pricePerChild' | 'revenueGoal', v: string) =>
+    setForm((f) => ({ ...f, [k]: Number(v) }));
+
+  return (
+    <ModalShell title="Editar Expedição" onClose={onClose}>
+      <div className="grid md:grid-cols-2 gap-4">
+        <input className="input md:col-span-2" placeholder="Nome da rota *" value={form.routeName} onChange={(e) => setForm({ ...form, routeName: e.target.value })} />
+        <input className="input" placeholder="Setor (ex: Expedições 4x4)" value={form.sector} onChange={(e) => setForm({ ...form, sector: e.target.value })} />
+        <input className="input" placeholder="Local" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+        <div>
+          <label className="text-xs text-gray-500">Início</label>
+          <input type="date" className="input" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">Fim</label>
+          <input type="date" className="input" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">Vagas (carros)</label>
+          <input type="number" className="input" value={form.slots} onChange={(e) => num('slots', e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">Status</label>
+          <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Expedition['status'] })}>
+            {Object.entries(expStatusLabel).map(([k, label]) => (
+              <option key={k} value={k}>{label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">Preço por adulto (R$)</label>
+          <input type="number" className="input" value={form.pricePerPerson} onChange={(e) => num('pricePerPerson', e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">Preço por criança (R$)</label>
+          <input type="number" className="input" value={form.pricePerChild} onChange={(e) => num('pricePerChild', e.target.value)} />
+        </div>
+        <div className="md:col-span-2">
+          <label className="text-xs text-gray-500">Meta de faturamento (R$)</label>
+          <input type="number" className="input" value={form.revenueGoal} onChange={(e) => num('revenueGoal', e.target.value)} />
+        </div>
+        <textarea className="input md:col-span-2 h-20" placeholder="Descrição" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+        <div className="md:col-span-2 flex gap-2">
+          <button onClick={save} disabled={saving} className="btn btn-primary">{saving ? 'Salvando...' : 'Salvar'}</button>
+          <button onClick={onClose} className="btn btn-secondary">Cancelar</button>
+        </div>
+      </div>
+    </ModalShell>
   );
 }
 

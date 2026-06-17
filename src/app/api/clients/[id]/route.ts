@@ -36,6 +36,7 @@ export async function PATCH(
         weight: m.weight ? Number(m.weight) : undefined,
         height: m.height ? Number(m.height) : undefined,
         shirtSize: m.shirtSize,
+        priceCategory: m.priceCategory || undefined,
       }));
     }
     const client = await clientsStore.update(id, patch);
