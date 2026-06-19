@@ -40,6 +40,7 @@ const SHIRT_TABLE_INFANTIL = {
 interface Passenger {
   name: string;
   isChild: boolean;
+  shirtSize: string;
 }
 
 interface ExpeditionInfo {
@@ -83,7 +84,9 @@ interface FormData {
   petInfo: string;
   emergencyContact: string;
   roomConfig: string;
-  shirtSizes: string[];
+  driverShirtSize: string;
+  companionShirtSize: string;
+  howFound: string;
   notes: string;
 }
 
@@ -114,7 +117,9 @@ const emptyForm: FormData = {
   petInfo: '',
   emergencyContact: '',
   roomConfig: '',
-  shirtSizes: [],
+  driverShirtSize: '',
+  companionShirtSize: '',
+  howFound: '',
   notes: '',
 };
 
@@ -168,17 +173,9 @@ export default function CadastroPage() {
   const set = <K extends keyof FormData>(key: K, value: FormData[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  const toggleShirt = (size: string) =>
-    setForm((f) => ({
-      ...f,
-      shirtSizes: f.shirtSizes.includes(size)
-        ? f.shirtSizes.filter((s) => s !== size)
-        : [...f.shirtSizes, size],
-    }));
-
   const addPassenger = () => {
     if (form.additionalPassengers.length >= 4) return;
-    setForm((f) => ({ ...f, additionalPassengers: [...f.additionalPassengers, { name: '', isChild: false }] }));
+    setForm((f) => ({ ...f, additionalPassengers: [...f.additionalPassengers, { name: '', isChild: false, shirtSize: '' }] }));
   };
 
   const updatePassenger = (i: number, patch: Partial<Passenger>) =>
@@ -222,7 +219,7 @@ export default function CadastroPage() {
         car: c.vehicleModel || f.car,
         vehiclePlate: c.vehiclePlate || f.vehiclePlate,
         roomConfig: c.roomConfig || f.roomConfig,
-        shirtSizes: c.shirtSizes && c.shirtSizes.length ? c.shirtSizes : f.shirtSizes,
+        driverShirtSize: c.shirtSize || f.driverShirtSize,
       }));
       setPrefilled(true);
       setShowLookup(false);
@@ -244,7 +241,7 @@ export default function CadastroPage() {
     if (form.hasAdditional === null) { toast.error('Informe se há passageiros adicionais'); return; }
     if (!form.emergencyContact.trim()) { toast.error('Informe o contato de emergência'); return; }
     if (!form.roomConfig) { toast.error('Selecione a configuração do quarto'); return; }
-    if (form.shirtSizes.length === 0) { toast.error('Selecione ao menos um tamanho de camiseta'); return; }
+    if (!form.driverShirtSize) { toast.error('Selecione o tamanho de camiseta do motorista principal'); return; }
     if (!form.confirmedResponsibility) { toast.error('Confirme a responsabilidade sobre os dados'); return; }
 
     setSaving(true);
@@ -259,6 +256,7 @@ export default function CadastroPage() {
           document: form.companionCpf || undefined,
           job: form.companionJob || undefined,
           isChild: false,
+          shirtSize: form.companionShirtSize || undefined,
         });
       }
 
@@ -268,9 +266,17 @@ export default function CadastroPage() {
             name: p.name,
             relation: p.isChild ? 'filho' : 'outro',
             isChild: p.isChild,
+            shirtSize: p.shirtSize || undefined,
           });
         }
       }
+
+      // monta array global de tamanhos (para compatibilidade e planilha)
+      const allShirtSizes = [
+        form.driverShirtSize,
+        form.companionShirtSize,
+        ...form.additionalPassengers.map((p) => p.shirtSize),
+      ].filter(Boolean) as string[];
 
       const [city, state] = form.cityState.split('/').map((s) => s.trim());
 
@@ -296,10 +302,12 @@ export default function CadastroPage() {
             ? { model: form.car, plate: form.vehiclePlate }
             : undefined,
           family,
-          shirtSizes: form.shirtSizes,
+          shirtSize: form.driverShirtSize || undefined,
+          shirtSizes: allShirtSizes,
           roomConfig: form.roomConfig || undefined,
           emergencyContact: form.emergencyContact || undefined,
           petInfo: form.petInfo || undefined,
+          howFound: form.howFound || undefined,
           notes: form.notes || undefined,
         }),
       });
@@ -634,44 +642,59 @@ export default function CadastroPage() {
           </div>
         </Card>
 
-        {/* Camisetas */}
-        <Card title="Seleção de Camisetas" icon={<Shirt size={15} />}>
+        {/* Camisetas por pessoa */}
+        <Card title="Camisetas" icon={<Shirt size={15} />}>
           <p className="text-xs text-gray-500 mb-3">
-            Selecione todos os tamanhos necessários para sua comitiva (pode marcar mais de um) *
+            Selecione o tamanho de cada pessoa da sua comitiva *
           </p>
-
-          {/* Feature 5: tabela de medidas */}
           <ShirtSizeTable />
+          <div className="space-y-3">
+            <ShirtPersonRow
+              name={form.name || 'Motorista principal'}
+              isChild={false}
+              value={form.driverShirtSize}
+              onChange={(v) => set('driverShirtSize', v)}
+              required
+            />
+            {form.companionName.trim() && (
+              <ShirtPersonRow
+                name={form.companionName}
+                isChild={false}
+                value={form.companionShirtSize}
+                onChange={(v) => set('companionShirtSize', v)}
+              />
+            )}
+            {form.hasAdditional && form.additionalPassengers.map((p, i) =>
+              p.name.trim() ? (
+                <ShirtPersonRow
+                  key={i}
+                  name={p.name}
+                  isChild={p.isChild}
+                  value={p.shirtSize}
+                  onChange={(v) => updatePassenger(i, { shirtSize: v })}
+                />
+              ) : null
+            )}
+          </div>
+        </Card>
 
-          <div className="mb-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Adulto</p>
-            <div className="flex flex-wrap gap-2">
-              {SHIRT_SIZES_ADULT.map((s) => (
-                <button key={s} type="button" onClick={() => toggleShirt(s)}
-                  className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${form.shirtSizes.includes(s) ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white border-gray-200 text-gray-700 hover:border-orange-300'}`}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="mb-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Infantil</p>
-            <div className="flex flex-wrap gap-2">
-              {SHIRT_SIZES_INFANTIL.map((s) => (
-                <button key={s} type="button" onClick={() => toggleShirt(s)}
-                  className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${form.shirtSizes.includes(s) ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white border-gray-200 text-gray-700 hover:border-orange-300'}`}>
-                  {s.replace('Infantil ', '')}
-                </button>
-              ))}
-              <button type="button" onClick={() => toggleShirt('Outro')}
-                className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${form.shirtSizes.includes('Outro') ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white border-gray-200 text-gray-700 hover:border-orange-300'}`}>
-                Outro
-              </button>
-            </div>
-          </div>
-          {form.shirtSizes.length > 0 && (
-            <p className="text-xs text-emerald-600 mt-2">Selecionado: {form.shirtSizes.join(', ')}</p>
-          )}
+        {/* Como nos encontrou */}
+        <Card title="Como nos encontrou?">
+          <select
+            className="input"
+            value={form.howFound}
+            onChange={(e) => set('howFound', e.target.value)}
+          >
+            <option value="">Selecione...</option>
+            <option value="instagram">Instagram (@4x4mundoafora)</option>
+            <option value="meta_ads">Anúncio no Instagram / Facebook</option>
+            <option value="google">Google</option>
+            <option value="google_ads">Anúncio no Google</option>
+            <option value="site">Site da 4x4 Mundo Afora</option>
+            <option value="indicacao">Indicação de amigo ou familiar</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="outro">Outra</option>
+          </select>
         </Card>
 
         {/* Observações */}
@@ -742,6 +765,47 @@ function Card({ title, icon, children }: { title: string; icon?: React.ReactNode
         {title}
       </h2>
       {children}
+    </div>
+  );
+}
+
+// ───────────────────────── Seletor de camiseta por pessoa ────────────────────
+function ShirtPersonRow({
+  name, isChild, value, onChange, required,
+}: {
+  name: string;
+  isChild: boolean;
+  value: string;
+  onChange: (v: string) => void;
+  required?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2.5">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-800 truncate">
+          {name}
+          {isChild && <span className="ml-1.5 text-[10px] bg-amber-100 text-amber-700 rounded-full px-1.5 py-0.5 font-semibold">FILHO/A</span>}
+          {required && <span className="text-orange-500 ml-0.5">*</span>}
+        </p>
+      </div>
+      <select
+        className="input w-36 text-sm py-1.5"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">Tamanho...</option>
+        <optgroup label="Adulto">
+          {['PP', 'P', 'M', 'G', 'GG', 'XG', 'G1', 'G2', 'G3'].map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </optgroup>
+        <optgroup label="Infantil">
+          {['Infantil 02', 'Infantil 04', 'Infantil 06', 'Infantil 08', 'Infantil 10', 'Infantil 12', 'Infantil 14'].map((s) => (
+            <option key={s} value={s}>{s.replace('Infantil ', 'Inf. ')}</option>
+          ))}
+        </optgroup>
+        <option value="Outro">Outro</option>
+      </select>
     </div>
   );
 }

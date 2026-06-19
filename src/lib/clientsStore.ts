@@ -53,6 +53,8 @@ export interface Client extends BaseRecord {
   vehicle?: Vehicle;
   notes?: string;
   origin?: string;
+  howFound?: string; // como nos encontrou: instagram, meta_ads, google, site, indicacao, whatsapp, outro
+  shirtSize?: string; // tamanho de camiseta do titular
 }
 
 function seed(): Client[] {

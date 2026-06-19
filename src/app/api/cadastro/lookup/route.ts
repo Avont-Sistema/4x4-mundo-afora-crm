@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
       vehicleModel: client.vehicle?.model || '',
       vehiclePlate: client.vehicle?.plate || '',
       roomConfig: client.roomConfig || '',
+      shirtSize: client.shirtSize || '',
       shirtSizes: client.shirtSizes || [],
     },
   });

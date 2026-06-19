@@ -94,10 +94,12 @@ export async function POST(request: NextRequest) {
       city: body.city || undefined,
       state: body.state || undefined,
       vehicle: body.vehicle || undefined,
+      shirtSize: (body.shirtSize as string | undefined) || undefined,
       shirtSizes: Array.isArray(body.shirtSizes) ? (body.shirtSizes as string[]) : [],
       roomConfig: body.roomConfig || undefined,
-      emergencyContact: body.emergencyContact || undefined, // string "nome e telefone"
+      emergencyContact: body.emergencyContact || undefined,
       petInfo: body.petInfo || undefined,
+      howFound: (body.howFound as string | undefined) || undefined,
       notes: body.notes || undefined,
     };
 
@@ -132,6 +134,7 @@ export async function POST(request: NextRequest) {
         city: fill(existing.city, incoming.city),
         state: fill(existing.state, incoming.state),
         vehicle: hasVehicle ? existing.vehicle : incoming.vehicle,
+        shirtSize: incoming.shirtSize || existing.shirtSize,
         shirtSizes,
         roomConfig: fill(existing.roomConfig, incoming.roomConfig),
         emergencyContact: existing.emergencyContact?.name
@@ -140,6 +143,7 @@ export async function POST(request: NextRequest) {
             ? { name: incoming.emergencyContact, phone: '' }
             : existing.emergencyContact,
         petInfo: fill(existing.petInfo, incoming.petInfo),
+        howFound: fill(existing.howFound, incoming.howFound),
         family,
       };
       client = (await clientsStore.update(existing.id, patch))!;
@@ -159,12 +163,14 @@ export async function POST(request: NextRequest) {
         city: incoming.city,
         state: incoming.state,
         vehicle: incoming.vehicle,
+        shirtSize: incoming.shirtSize,
         shirtSizes: incoming.shirtSizes,
         roomConfig: incoming.roomConfig,
         emergencyContact: incoming.emergencyContact
           ? { name: incoming.emergencyContact, phone: '' }
           : undefined,
         petInfo: incoming.petInfo,
+        howFound: incoming.howFound,
         family: incomingFamily,
         notes: incoming.notes,
         origin: 'formulario',
@@ -185,7 +191,12 @@ export async function POST(request: NextRequest) {
         const obs = [
           'Inscrição recebida via formulário.',
           incoming.roomConfig ? `Quarto: ${incoming.roomConfig}` : '',
-          incoming.shirtSizes.length ? `Camisetas: ${incoming.shirtSizes.join(', ')}` : '',
+          incoming.shirtSizes.length
+            ? `Camisetas: ${[
+                incoming.shirtSize ? `${incoming.name} (${incoming.shirtSize})` : '',
+                ...incomingFamily.map((m) => m.shirtSize ? `${m.name.split(' ')[0]} (${m.shirtSize})` : ''),
+              ].filter(Boolean).join(', ') || incoming.shirtSizes.join(', ')}`
+            : '',
           incoming.petInfo ? `Pet: ${incoming.petInfo}` : '',
           incoming.emergencyContact ? `Emergência: ${incoming.emergencyContact}` : '',
           incoming.notes ? `Obs.: ${incoming.notes}` : '',

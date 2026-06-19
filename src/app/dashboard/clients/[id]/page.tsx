@@ -41,6 +41,17 @@ const relationLabel: Record<string, string> = {
   outro: 'Outro',
 };
 
+const howFoundLabel: Record<string, string> = {
+  instagram: 'Instagram',
+  meta_ads: 'Meta Ads',
+  google: 'Google',
+  google_ads: 'Google Ads',
+  site: 'Site',
+  indicacao: 'Indicação',
+  whatsapp: 'WhatsApp',
+  outro: 'Outro',
+};
+
 const expStatusColor: Record<string, string> = {
   aberta: 'bg-yellow-100 text-amber-700',
   em_andamento: 'bg-emerald-100 text-emerald-700',
@@ -160,7 +171,9 @@ export default function ClientDetailPage() {
           <Field label="Altura" value={c.height ? `${c.height} cm` : '—'} />
           <Field label="CPF" value={c.cpf || '—'} />
           <Field label="Email" value={c.email || '—'} />
-          {c.shirtSizes?.length > 0 && <Field label="Camisetas" value={c.shirtSizes.join(', ')} />}
+          {c.shirtSize && <Field label="Camiseta" value={c.shirtSize} />}
+          {!c.shirtSize && c.shirtSizes?.length > 0 && <Field label="Camisetas" value={c.shirtSizes.join(', ')} />}
+          {c.howFound && <Field label="Como encontrou" value={howFoundLabel[c.howFound] || c.howFound} />}
           {c.origin === 'formulario' && <Field label="Origem" value="Formulário online" />}
         </div>
 
@@ -180,6 +193,11 @@ export default function ClientDetailPage() {
                   <span className="text-gray-500">{age(m.birthDate) || '—'}</span>
                   <span className="text-gray-500">{m.weight ? `${m.weight} kg` : '—'}</span>
                   <span className="text-gray-500">{m.height ? `${m.height} cm` : '—'}</span>
+                  {m.shirtSize && (
+                    <span className="text-xs bg-yellow-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">
+                      Camiseta {m.shirtSize}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
