@@ -48,7 +48,8 @@ export async function GET(request: NextRequest) {
       endDate: exp?.endDate,
       location: exp?.location,
     }),
-    signLine: formatSignLine(signCity),
+    signCity,          // usado pelo cliente para gerar a data no momento da assinatura
+    signLine: formatSignLine(signCity), // fallback (data do carregamento)
     version: TERM_VERSION,
   };
 

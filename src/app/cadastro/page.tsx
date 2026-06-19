@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { generateContractPdf, type ContractPdfData } from '@/lib/contractPdf';
+import { formatSignLine } from '@/lib/imageRightsTerm';
 
 const SHIRT_SIZES_ADULT = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'G1', 'G2', 'G3'];
 const SHIRT_SIZES_INFANTIL = ['Infantil 02', 'Infantil 04', 'Infantil 06', 'Infantil 08', 'Infantil 10', 'Infantil 12', 'Infantil 14'];
@@ -53,6 +54,7 @@ interface ExpeditionInfo {
 
 interface TermInfo {
   text: string;
+  signCity?: string;
   signLine: string;
   version: string;
 }
@@ -334,6 +336,11 @@ export default function CadastroPage() {
       if (form.companionName.trim()) party.push({ name: form.companionName, cpf: form.companionCpf });
       form.additionalPassengers.forEach((p) => { if (p.name.trim()) party.push({ name: p.name }); });
 
+      // gera a data no momento exato da assinatura (horário do cliente)
+      const currentSignLine = term?.signCity
+        ? formatSignLine(term.signCity)
+        : term?.signLine ?? '';
+
       const res = await fetch('/api/contracts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -345,7 +352,7 @@ export default function CadastroPage() {
           expeditionName,
           termVersion: term?.version,
           termSnapshot: term?.text,
-          signLine: term?.signLine,
+          signLine: currentSignLine,
           signatureDataUrl,
           party,
         }),
@@ -366,7 +373,7 @@ export default function CadastroPage() {
         signerCpf: form.cpf,
         expeditionName,
         termSnapshot: term?.text || '',
-        signLine: term?.signLine,
+        signLine: currentSignLine,
         signatureDataUrl,
         party,
         signedAt: data.signedAt,
@@ -969,7 +976,11 @@ function SignatureStep({
           </h2>
           <div className="max-h-[55vh] overflow-y-auto pr-2 text-[13px] leading-relaxed text-gray-700 whitespace-pre-line border border-gray-100 rounded-lg p-4 bg-gray-50">
             {term ? term.text : 'Carregando termo...'}
-            {term?.signLine && <p className="mt-4 font-medium text-gray-800">{term.signLine}</p>}
+            {term?.signCity && (
+              <p className="mt-4 font-medium text-gray-800">
+                {formatSignLine(term.signCity)}
+              </p>
+            )}
           </div>
         </div>
 
