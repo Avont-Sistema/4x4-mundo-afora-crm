@@ -26,7 +26,7 @@ const menuItems: MenuItem[] = [
   { href: '/dashboard/financial', label: 'Financeiro', icon: DollarSign, adminOnly: true },
   { href: '/dashboard/agenda', label: 'Agenda', icon: Calendar, adminOnly: true },
   { href: '/dashboard/campaigns', label: 'Campanhas', icon: Mail, soon: true, adminOnly: true },
-  { href: '/dashboard/whatsapp', label: 'WhatsApp IA', icon: MessageCircle, soon: true },
+  { href: '/dashboard/whatsapp', label: 'WhatsApp IA', icon: MessageCircle },
   { href: '/dashboard/settings', label: 'Configurações', icon: Plug, adminOnly: true },
 ];
 

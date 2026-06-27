@@ -1,0 +1,16 @@
+{
+  "name": "4x4-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "Serviço Baileys que conecta WhatsApp ao CRM 4x4 Mundo Afora",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.18",
+    "express": "^4.18.2",
+    "pino": "^8.19.0",
+    "qrcode": "^1.5.4"
+  }
+}

@@ -10,8 +10,6 @@ import toast from 'react-hot-toast';
 import { generateContractPdf, type ContractPdfData } from '@/lib/contractPdf';
 import { formatSignLine } from '@/lib/imageRightsTerm';
 
-const SHIRT_SIZES_ADULT = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'G1', 'G2', 'G3'];
-const SHIRT_SIZES_INFANTIL = ['Infantil 02', 'Infantil 04', 'Infantil 06', 'Infantil 08', 'Infantil 10', 'Infantil 12', 'Infantil 14'];
 
 const ROOM_OPTIONS = [
   'Suíte Casal',

@@ -8,14 +8,14 @@ export async function POST(request: NextRequest) {
   const r = resolve();
 
   try {
-    if (target === 'anthropic') {
-      if (!r.anthropicApiKey) return NextResponse.json({ ok: false, message: 'Chave não configurada' });
-      const res = await fetch('https://api.anthropic.com/v1/models', {
-        headers: { 'x-api-key': r.anthropicApiKey, 'anthropic-version': '2023-06-01' },
+    if (target === 'deepseek') {
+      if (!r.deepseekApiKey) return NextResponse.json({ ok: false, message: 'Chave não configurada' });
+      const res = await fetch('https://api.deepseek.com/models', {
+        headers: { Authorization: `Bearer ${r.deepseekApiKey}` },
       });
       return NextResponse.json({
         ok: res.ok,
-        message: res.ok ? 'Chave válida ✓' : `Falhou (${res.status})`,
+        message: res.ok ? 'Chave DeepSeek válida ✓' : `Falhou (${res.status})`,
       });
     }
 

@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getConversation, setMode, type ConvMode } from '@/lib/conversationsStore';
+import { botFetch } from '@/lib/botProxy';
 
 export async function GET(
-  _request: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ phone: string }> }
 ) {
   const { phone } = await params;
-  const conv = getConversation(decodeURIComponent(phone));
-  if (!conv) {
-    return NextResponse.json({ error: 'Conversa não encontrada' }, { status: 404 });
+  try {
+    const res = await botFetch(`/api/history/${encodeURIComponent(phone)}`);
+    if (!res.ok) return NextResponse.json({ messages: [] });
+    const data = await res.json();
+    return NextResponse.json({ messages: data.history || [] });
+  } catch {
+    return NextResponse.json({ messages: [] });
   }
-  return NextResponse.json({ conversation: conv });
 }
 
 export async function PATCH(
@@ -19,13 +22,13 @@ export async function PATCH(
 ) {
   const { phone } = await params;
   const body = await request.json();
-  const mode = body.mode as ConvMode;
-  if (!['bot', 'human', 'resolved'].includes(mode)) {
-    return NextResponse.json({ error: 'mode inválido' }, { status: 400 });
+  try {
+    await botFetch('/api/bot-toggle', {
+      method: 'POST',
+      body: JSON.stringify({ phone, bot_active: body.bot_active }),
+    });
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: 'Bot offline' }, { status: 503 });
   }
-  const conv = setMode(decodeURIComponent(phone), mode);
-  if (!conv) {
-    return NextResponse.json({ error: 'Conversa não encontrada' }, { status: 404 });
-  }
-  return NextResponse.json({ conversation: conv });
 }

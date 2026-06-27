@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { TOOLS, executeTool } from './tools';
 import { masterPrompt, negocio } from './negocio';
 import { expeditionsStore, buildExpeditionDetail } from '@/lib/expeditionsStore';
@@ -6,35 +6,43 @@ import { resolve } from '@/lib/integrationsStore';
 
 const MAX_HISTORY = 20;
 
-function getClient(): Anthropic | null {
-  const key = resolve().anthropicApiKey;
-  return key ? new Anthropic({ apiKey: key }) : null;
+function getClient(): OpenAI | null {
+  const key = resolve().deepseekApiKey;
+  return key
+    ? new OpenAI({ apiKey: key, baseURL: 'https://api.deepseek.com' })
+    : null;
 }
+
 function getModel(): string {
-  return resolve().agentModel || 'claude-haiku-4-5';
+  return resolve().agentModel || 'deepseek-chat';
 }
 
-export const aiEnabled = () => Boolean(resolve().anthropicApiKey);
+export const aiEnabled = () => Boolean(resolve().deepseekApiKey);
 
-type Msg = { role: 'user' | 'assistant'; content: any };
+type Msg = OpenAI.Chat.ChatCompletionMessageParam;
 
 // ── Triagem ──────────────────────────────────────────────────────────────
 export async function classify(message: string): Promise<string> {
   const client = getClient();
   if (!client) return 'INFO';
   try {
-    const res = await client.messages.create({
+    const res = await client.chat.completions.create({
       model: getModel(),
       max_tokens: 10,
-      system: `Classifique a mensagem do cliente de uma agência de expedições offroad.
+      messages: [
+        {
+          role: 'system',
+          content: `Classifique a mensagem do cliente de uma agência de expedições offroad.
 Responda SOMENTE com uma palavra:
 - COMERCIAL → interesse em contratar, preços, datas, vagas, fechar
 - SUPORTE → já é cliente, dúvidas sobre expedição contratada, pagamento, logística
 - INFO → dúvidas gerais, como funciona, o que está incluso`,
-      messages: [{ role: 'user', content: message }],
+        },
+        { role: 'user', content: message },
+      ],
     });
-    const cat = (res.content[0] as any).text?.trim().toUpperCase().split(/\s/)[0];
-    return ['COMERCIAL', 'SUPORTE', 'INFO'].includes(cat) ? cat : 'INFO';
+    const cat = res.choices[0].message.content?.trim().toUpperCase().split(/\s/)[0];
+    return ['COMERCIAL', 'SUPORTE', 'INFO'].includes(cat || '') ? cat! : 'INFO';
   } catch {
     return 'INFO';
   }
@@ -52,45 +60,45 @@ export async function runAgent(
   }
 
   const system = masterPrompt(operatorNotes);
-  const messages: Msg[] = history.slice(-MAX_HISTORY).map((m) => ({ ...m }));
+  const messages: Msg[] = [
+    { role: 'system', content: system },
+    ...history.slice(-MAX_HISTORY).map((m) => ({ role: m.role, content: m.content } as Msg)),
+  ];
   const usedTools: string[] = [];
   const model = getModel();
 
   try {
     for (let i = 0; i < 6; i++) {
-      const res: any = await client.messages.create({
+      const res = await client.chat.completions.create({
         model,
         max_tokens: 1024,
-        system,
-        tools: TOOLS,
         messages,
-      } as any);
+        tools: TOOLS,
+        tool_choice: 'auto',
+      });
 
-      if (res.stop_reason === 'tool_use') {
-        messages.push({ role: 'assistant', content: res.content });
-        const toolResults: any[] = [];
-        for (const block of res.content as any[]) {
-          if (block.type !== 'tool_use') continue;
-          usedTools.push(block.name);
-          const result = await executeTool(block.name, block.input, phone);
-          toolResults.push({
-            type: 'tool_result',
-            tool_use_id: block.id,
+      const choice = res.choices[0];
+
+      if (choice.finish_reason === 'tool_calls') {
+        messages.push(choice.message);
+        for (const call of choice.message.tool_calls || []) {
+          usedTools.push(call.function.name);
+          const input = JSON.parse(call.function.arguments || '{}');
+          const result = await executeTool(call.function.name, input, phone);
+          messages.push({
+            role: 'tool',
+            tool_call_id: call.id,
             content: JSON.stringify(result),
           });
         }
-        messages.push({ role: 'user', content: toolResults });
         continue;
       }
 
-      // resposta final
-      const text =
-        (res.content.find((b: any) => b.type === 'text') as any)?.text || '';
+      const text = choice.message.content || '';
       return { reply: text || 'Pode repetir, por favor?', usedTools };
     }
     return { reply: 'Desculpe, tive um problema. Pode repetir?', usedTools };
   } catch (err: any) {
-    // Chave inválida / API fora do ar / etc → não derruba o atendimento
     console.error('[agent] erro na IA, usando fallback:', err?.message);
     return {
       reply: await fallbackReply(history[history.length - 1]?.content || ''),
@@ -99,7 +107,7 @@ export async function runAgent(
   }
 }
 
-// ── Fallback sem IA (mantém o sistema funcional sem ANTHROPIC_API_KEY) ──────
+// ── Fallback sem IA ──────────────────────────────────────────────────────────
 async function fallbackReply(message: string): Promise<string> {
   const m = message.toLowerCase();
 

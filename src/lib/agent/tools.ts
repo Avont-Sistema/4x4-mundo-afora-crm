@@ -1,3 +1,4 @@
+import type OpenAI from 'openai';
 import { negocio } from './negocio';
 import {
   expeditionsStore,
@@ -9,118 +10,148 @@ import { upsertLeadFromContact, findLeadByPhone } from '@/lib/leadsStore';
 import { setMode } from '@/lib/conversationsStore';
 import { createCharge } from '@/lib/payments';
 
-// ── Definições enviadas ao Claude ──────────────────────────────────────────
-export const TOOLS = [
+// ── Definições de tools no formato OpenAI (compatível com DeepSeek) ──────────
+export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
   {
-    name: 'consultar_expedicoes',
-    description:
-      'Lista as expedições abertas com datas, vagas disponíveis e preços reais. Use sempre que o cliente perguntar sobre opções, próximas saídas, valores ou disponibilidade.',
-    input_schema: { type: 'object' as const, properties: {} },
-  },
-  {
-    name: 'consultar_expedicao',
-    description:
-      'Detalha uma expedição específica pelo nome (ou parte dele): datas, vagas, preço por adulto e por criança.',
-    input_schema: {
-      type: 'object' as const,
-      properties: { nome: { type: 'string', description: 'Nome ou parte do nome da expedição' } },
-      required: ['nome'],
+    type: 'function',
+    function: {
+      name: 'consultar_expedicoes',
+      description:
+        'Lista as expedições abertas com datas, vagas disponíveis e preços reais. Use sempre que o cliente perguntar sobre opções, próximas saídas, valores ou disponibilidade.',
+      parameters: { type: 'object', properties: {} },
     },
   },
   {
-    name: 'consultar_cliente',
-    description:
-      'Busca se o telefone já é um lead ou cliente cadastrado (nome, estágio, expedições).',
-    input_schema: { type: 'object' as const, properties: {} },
-  },
-  {
-    name: 'registrar_lead',
-    description:
-      'Registra/atualiza o interesse do cliente como lead no CRM. Use assim que souber o nome e o interesse.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        nome: { type: 'string', description: 'Nome do cliente' },
-        interesse: { type: 'string', description: 'Expedição ou assunto de interesse' },
-        observacoes: { type: 'string', description: 'Outras informações relevantes' },
+    type: 'function',
+    function: {
+      name: 'consultar_expedicao',
+      description:
+        'Detalha uma expedição específica pelo nome (ou parte dele): datas, vagas, preço por adulto e por criança.',
+      parameters: {
+        type: 'object',
+        properties: { nome: { type: 'string', description: 'Nome ou parte do nome da expedição' } },
+        required: ['nome'],
       },
-      required: ['nome'],
     },
   },
   {
-    name: 'gerar_link_pagamento',
-    description:
-      'Gera o pagamento da expedição. Suporta PIX, cartão e parcelamento (quando informado parcelas). Informe a expedição, quantidade de pessoas e, para cartão/parcelado, peça o CPF do cliente.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        expedicao: { type: 'string', description: 'Nome da expedição' },
-        adultos: { type: 'number', description: 'Quantidade de adultos' },
-        criancas: { type: 'number', description: 'Quantidade de crianças' },
-        nome: { type: 'string', description: 'Nome do cliente' },
-        cpf: { type: 'string', description: 'CPF do cliente (necessário para cartão/parcelado via Asaas)' },
-        parcelas: { type: 'number', description: 'Número de parcelas (1 = à vista)' },
+    type: 'function',
+    function: {
+      name: 'consultar_cliente',
+      description:
+        'Busca se o telefone já é um lead ou cliente cadastrado (nome, estágio, expedições).',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'registrar_lead',
+      description:
+        'Registra/atualiza o interesse do cliente como lead no CRM. Use assim que souber o nome e o interesse.',
+      parameters: {
+        type: 'object',
+        properties: {
+          nome: { type: 'string', description: 'Nome do cliente' },
+          interesse: { type: 'string', description: 'Expedição ou assunto de interesse' },
+          observacoes: { type: 'string', description: 'Outras informações relevantes' },
+        },
+        required: ['nome'],
       },
-      required: ['expedicao'],
     },
   },
   {
-    name: 'cadastrar_cliente',
-    description:
-      'Cadastra o cliente no CRM (use após o cliente confirmar interesse de fechar ou efetuar pagamento).',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        nome: { type: 'string', description: 'Nome completo' },
-        email: { type: 'string', description: 'Email (se tiver)' },
+    type: 'function',
+    function: {
+      name: 'gerar_link_pagamento',
+      description:
+        'Gera o pagamento da expedição. Suporta PIX, cartão e parcelamento (quando informado parcelas). Informe a expedição, quantidade de pessoas e, para cartão/parcelado, peça o CPF do cliente.',
+      parameters: {
+        type: 'object',
+        properties: {
+          expedicao: { type: 'string', description: 'Nome da expedição' },
+          adultos: { type: 'number', description: 'Quantidade de adultos' },
+          criancas: { type: 'number', description: 'Quantidade de crianças' },
+          nome: { type: 'string', description: 'Nome do cliente' },
+          cpf: { type: 'string', description: 'CPF do cliente (necessário para cartão/parcelado via Asaas)' },
+          parcelas: { type: 'number', description: 'Número de parcelas (1 = à vista)' },
+        },
+        required: ['expedicao'],
       },
-      required: ['nome'],
     },
   },
   {
-    name: 'matricular_cliente',
-    description:
-      'Matricula o cliente em uma expedição. Use após cadastrar o cliente e ele confirmar a ida.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        expedicao: { type: 'string', description: 'Nome da expedição' },
-        adultos: { type: 'number' },
-        criancas: { type: 'number' },
+    type: 'function',
+    function: {
+      name: 'cadastrar_cliente',
+      description:
+        'Cadastra o cliente no CRM (use após o cliente confirmar interesse de fechar ou efetuar pagamento).',
+      parameters: {
+        type: 'object',
+        properties: {
+          nome: { type: 'string', description: 'Nome completo' },
+          email: { type: 'string', description: 'Email (se tiver)' },
+        },
+        required: ['nome'],
       },
-      required: ['expedicao'],
     },
   },
   {
-    name: 'registrar_pagamento',
-    description:
-      'Lança um pagamento do cliente numa expedição que ele já está matriculado.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        expedicao: { type: 'string' },
-        valor: { type: 'number', description: 'Valor pago em reais' },
-        metodo: { type: 'string', description: 'pix, cartao, link...' },
+    type: 'function',
+    function: {
+      name: 'matricular_cliente',
+      description:
+        'Matricula o cliente em uma expedição. Use após cadastrar o cliente e ele confirmar a ida.',
+      parameters: {
+        type: 'object',
+        properties: {
+          expedicao: { type: 'string', description: 'Nome da expedição' },
+          adultos: { type: 'number' },
+          criancas: { type: 'number' },
+        },
+        required: ['expedicao'],
       },
-      required: ['expedicao', 'valor'],
     },
   },
   {
-    name: 'buscar_faq',
-    description: 'Responde dúvidas frequentes (carro 4x4, criança, o que está incluso, pagamento).',
-    input_schema: {
-      type: 'object' as const,
-      properties: { pergunta: { type: 'string' } },
-      required: ['pergunta'],
+    type: 'function',
+    function: {
+      name: 'registrar_pagamento',
+      description:
+        'Lança um pagamento do cliente numa expedição que ele já está matriculado.',
+      parameters: {
+        type: 'object',
+        properties: {
+          expedicao: { type: 'string' },
+          valor: { type: 'number', description: 'Valor pago em reais' },
+          metodo: { type: 'string', description: 'pix, cartao, link...' },
+        },
+        required: ['expedicao', 'valor'],
+      },
     },
   },
   {
-    name: 'escalar_humano',
-    description:
-      'Transfere a conversa para um atendente humano. Use em reclamações, casos delicados ou quando não souber responder.',
-    input_schema: {
-      type: 'object' as const,
-      properties: { motivo: { type: 'string' } },
+    type: 'function',
+    function: {
+      name: 'buscar_faq',
+      description: 'Responde dúvidas frequentes (carro 4x4, criança, o que está incluso, pagamento).',
+      parameters: {
+        type: 'object',
+        properties: { pergunta: { type: 'string' } },
+        required: ['pergunta'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'escalar_humano',
+      description:
+        'Transfere a conversa para um atendente humano. Use em reclamações, casos delicados ou quando não souber responder.',
+      parameters: {
+        type: 'object',
+        properties: { motivo: { type: 'string' } },
+      },
     },
   },
 ];

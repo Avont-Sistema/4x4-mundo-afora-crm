@@ -10,7 +10,7 @@ import path from 'path';
 
 export interface Integrations {
   // IA
-  anthropicApiKey: string;
+  deepseekApiKey: string;
   agentModel: string;
   // Pagamentos — PIX grátis
   pixKey: string;
@@ -34,7 +34,7 @@ export interface Integrations {
 
 // Quais campos são segredos (mascarados ao devolver pra UI)
 export const SECRET_FIELDS: (keyof Integrations)[] = [
-  'anthropicApiKey',
+  'deepseekApiKey',
   'asaasApiKey',
   'asaasWebhookToken',
   'whatsappConnectorToken',
@@ -43,7 +43,7 @@ export const SECRET_FIELDS: (keyof Integrations)[] = [
 ];
 
 const ENV_MAP: Record<keyof Integrations, string> = {
-  anthropicApiKey: 'ANTHROPIC_API_KEY',
+  deepseekApiKey: 'DEEPSEEK_API_KEY',
   agentModel: 'AGENT_MODEL',
   pixKey: 'PIX_KEY',
   pixMerchantName: 'PIX_MERCHANT_NAME',
@@ -61,7 +61,7 @@ const ENV_MAP: Record<keyof Integrations, string> = {
 };
 
 const DEFAULTS: Partial<Integrations> = {
-  agentModel: 'claude-haiku-4-5',
+  agentModel: 'deepseek-chat',
   asaasEnv: 'sandbox',
   pixMerchantName: '4x4 Mundo Afora',
   pixMerchantCity: 'SAO PAULO',

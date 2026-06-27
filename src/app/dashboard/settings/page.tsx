@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Plug,
-  Bot,
   CreditCard,
   MessageCircle,
   Megaphone,
@@ -191,21 +190,6 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-6">
-        {/* IA */}
-        <section className="card">
-          <div className="flex items-center gap-2 mb-4">
-            <Bot className="text-amber-600" size={20} />
-            <h2 className="text-lg font-bold">Inteligência Artificial (Claude)</h2>
-          </div>
-          <div className="grid md:grid-cols-2 gap-4">
-            <Field k="anthropicApiKey" label="Anthropic API Key" placeholder="sk-ant-..." type="password" />
-            <Field k="agentModel" label="Modelo" placeholder="claude-haiku-4-5" />
-          </div>
-          <div className="mt-3">
-            <TestBtn target="anthropic" />
-          </div>
-        </section>
-
         {/* Pagamentos */}
         <section className="card">
           <div className="flex items-center gap-2 mb-4">
