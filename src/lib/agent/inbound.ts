@@ -2,6 +2,7 @@ import { appendMessage, toClaudeHistory } from '@/lib/conversationsStore';
 import { getSettings, isWithinBusinessHours } from '@/lib/settingsStore';
 import { findLeadByPhone, upsertLeadFromContact } from '@/lib/leadsStore';
 import { runAgent, aiEnabled } from './brain';
+import { getFlowsForTrigger, triggerFlow } from '@/lib/flowsStore';
 
 export interface InboundResult {
   reply: string | null; // null = não responder automaticamente
@@ -43,6 +44,17 @@ export async function processInbound(
     notes: existingLead ? undefined : 'Lead criado pelo agente do WhatsApp',
   });
   leadCreated = up.created;
+
+  // 2b. dispara fluxos de novo_lead automaticamente
+  if (leadCreated) {
+    const flows = await getFlowsForTrigger('new_lead');
+    for (const flow of flows) {
+      await triggerFlow(flow.id, phone, {
+        nome: contactName || phone,
+        telefone: phone,
+      });
+    }
+  }
 
   // 3. bot pausado ou conversa em modo humano/resolvido => não responde
   if (settings.botPaused) {

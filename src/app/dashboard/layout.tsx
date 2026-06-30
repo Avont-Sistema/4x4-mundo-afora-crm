@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Menu, X, LogOut, BarChart3, Users, MapPin, DollarSign,
-  MessageCircle, Settings, Mail, Plug, Calendar,
+  MessageCircle, Settings, Mail, Plug, Calendar, Zap,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -27,6 +27,7 @@ const menuItems: MenuItem[] = [
   { href: '/dashboard/agenda', label: 'Agenda', icon: Calendar, adminOnly: true },
   { href: '/dashboard/campaigns', label: 'Campanhas', icon: Mail, soon: true, adminOnly: true },
   { href: '/dashboard/whatsapp', label: 'WhatsApp IA', icon: MessageCircle },
+  { href: '/dashboard/flows', label: 'Fluxos Bot', icon: Zap, adminOnly: true },
   { href: '/dashboard/settings', label: 'Configurações', icon: Plug, adminOnly: true },
 ];
 

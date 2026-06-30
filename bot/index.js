@@ -494,10 +494,73 @@ app.delete('/api/meta-chat', auth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Flow message polling ──────────────────────────────────────────────────────
+async function pollFlowMessages() {
+  if (!isConnected || !sock) return;
+
+  let messages;
+  try {
+    const res = await fetch(`${CRM_URL}/api/whatsapp/pending-messages`, {
+      headers: { 'x-bot-secret': BOT_SECRET },
+    });
+    const data = await res.json();
+    messages = data.messages || [];
+  } catch (err) {
+    console.error('[flow] Erro ao buscar mensagens pendentes:', err.message);
+    return;
+  }
+
+  for (const msg of messages) {
+    const phone = msg.run?.phone;
+    if (!phone) continue;
+
+    const sendJid = resolveSendJid(phone);
+    let success = true;
+    let errorMsg = null;
+
+    try {
+      if (msg.type === 'text') {
+        await sock.sendMessage(sendJid, { text: msg.content || '' });
+      } else if (msg.type === 'image') {
+        // content é URL da imagem
+        await sock.sendMessage(sendJid, {
+          image: { url: msg.content },
+          caption: '',
+        });
+      } else if (msg.type === 'audio') {
+        // content é URL do áudio; ptt=true envia como nota de voz
+        await sock.sendMessage(sendJid, {
+          audio: { url: msg.content },
+          mimetype: 'audio/ogg; codecs=opus',
+          ptt: true,
+        });
+      }
+      console.log(`[flow] ✓ msg ${msg.id} enviada → ${sendJid}`);
+    } catch (err) {
+      success = false;
+      errorMsg = err.message;
+      console.error(`[flow] ✗ msg ${msg.id} falhou: ${err.message}`);
+    }
+
+    // Reporta resultado ao CRM
+    try {
+      await fetch(`${CRM_URL}/api/whatsapp/pending-messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-bot-secret': BOT_SECRET },
+        body: JSON.stringify({ id: msg.id, runId: msg.runId, success, error: errorMsg }),
+      });
+    } catch (err) {
+      console.error('[flow] Erro ao reportar resultado:', err.message);
+    }
+  }
+}
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`[bot] Serviço rodando na porta ${PORT}`);
   connectWhatsApp();
   // Verifica follow-ups a cada 15 minutos
   setInterval(runFollowupScheduler, 15 * 60 * 1000);
+  // Verifica mensagens de fluxo a cada 30 segundos
+  setInterval(pollFlowMessages, 30 * 1000);
 });

@@ -117,3 +117,53 @@ model WhatsAppMessage {
   sender    String   // "user" ou "bot"
   createdAt DateTime @default(now())
 }
+
+// ── Flow Builder ──────────────────────────────────────────────────────────────
+
+model Flow {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  trigger     String      // "new_lead" | "keyword" | "manual"
+  triggerData String?     // JSON: { "keyword": "rota café" }
+  active      Boolean     @default(true)
+  steps       FlowStep[]
+  runs        FlowRun[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model FlowStep {
+  id       String  @id @default(cuid())
+  flow     Flow    @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  flowId   String
+  order    Int
+  type     String  // "text" | "delay" | "image" | "audio"
+  content  String? // texto ou URL de mídia
+  delayMin Int     @default(0)
+}
+
+model FlowRun {
+  id        String        @id @default(cuid())
+  flow      Flow          @relation(fields: [flowId], references: [id])
+  flowId    String
+  phone     String
+  status    String        @default("running") // "running" | "completed" | "cancelled"
+  messages  FlowMessage[]
+  startedAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model FlowMessage {
+  id          String    @id @default(cuid())
+  run         FlowRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runId       String
+  stepOrder   Int
+  type        String    // "text" | "image" | "audio"
+  content     String?
+  scheduledAt DateTime
+  sentAt      DateTime?
+  status      String    @default("pending") // "pending" | "sent" | "failed" | "cancelled"
+  error       String?
+  createdAt   DateTime  @default(now())
+}
