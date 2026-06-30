@@ -234,23 +234,41 @@ async function connectWhatsApp() {
 
         if (data.reply) {
           try {
-            // Aguarda o mapeamento @lid caso ainda não tenha chegado
-            if (phone.includes('@lid') && !lidToJid.has(phone)) {
-              await new Promise(r => setTimeout(r, 2000));
-            }
             const sendJid = resolveSendJid(phone);
-            console.log(`[bot] Enviando para ${sendJid} (original: ${phone})`);
-            await sock.sendMessage(sendJid, { text: data.reply }, { quoted: msg });
-            conv.history.push({
-              role: 'assistant',
-              content: data.reply,
-              ts: new Date().toISOString(),
-              via: 'bot',
-            });
-            sendSSE({ type: 'reply_sent', phone, text: data.reply });
-            console.log(`[bot] → ${phone}: ${data.reply.slice(0, 60)}...`);
+            console.log(`[bot] Tentando enviar → jid=${sendJid} original=${phone}`);
+
+            let sent = false;
+            // Tentativa 1: phone JID sem quoted
+            try {
+              await sock.sendMessage(sendJid, { text: data.reply });
+              sent = true;
+              console.log(`[bot] ✓ enviado para ${sendJid}`);
+            } catch (e1) {
+              console.error(`[bot] ✗ falhou ${sendJid}: ${e1.message}`);
+            }
+
+            // Tentativa 2: LID direto sem quoted (se primeira falhou)
+            if (!sent && phone.includes('@lid')) {
+              try {
+                await sock.sendMessage(phone, { text: data.reply });
+                sent = true;
+                console.log(`[bot] ✓ enviado para LID ${phone}`);
+              } catch (e2) {
+                console.error(`[bot] ✗ falhou LID ${phone}: ${e2.message}`);
+              }
+            }
+
+            if (sent) {
+              conv.history.push({
+                role: 'assistant',
+                content: data.reply,
+                ts: new Date().toISOString(),
+                via: 'bot',
+              });
+              sendSSE({ type: 'reply_sent', phone, text: data.reply });
+            }
           } catch (sendErr) {
-            console.error('[bot] Erro ao enviar mensagem:', sendErr.message);
+            console.error('[bot] Erro geral ao enviar:', sendErr.message);
           }
         }
       } catch (err) {
@@ -388,6 +406,47 @@ app.post('/api/send', auth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Endpoint de diagnóstico — testa vários JIDs e formatos
+app.post('/api/test-jid', auth, async (req, res) => {
+  const { text = 'Teste diagnóstico bot 4x4' } = req.body;
+  if (!isConnected || !sock) return res.status(503).json({ error: 'não conectado' });
+
+  const results = [];
+  const jids = [];
+
+  // Coleta todos os @lid conhecidos e seus mapeamentos
+  for (const [lid, phone] of lidToJid.entries()) {
+    jids.push({ label: 'phone via lidToJid', jid: phone });
+    jids.push({ label: 'lid direto', jid: lid });
+  }
+
+  // Adiciona sessões conhecidas do auth
+  const authDir = process.env.AUTH_DIR || '/app/auth';
+  try {
+    const files = fs.readdirSync(authDir).filter(f => f.startsWith('session-'));
+    for (const f of files) {
+      const num = f.replace('session-', '').replace(/\.\d+\.json$/, '');
+      if (!num.includes('@')) {
+        const jid = `${num}@s.whatsapp.net`;
+        if (!jids.find(j => j.jid === jid)) {
+          jids.push({ label: `session-file`, jid });
+        }
+      }
+    }
+  } catch {}
+
+  for (const { label, jid } of jids.slice(0, 6)) {
+    try {
+      await sock.sendMessage(jid, { text: `[DIAG] ${text}` });
+      results.push({ jid, label, ok: true });
+    } catch (e) {
+      results.push({ jid, label, ok: false, err: e.message });
+    }
+  }
+
+  res.json({ results, botId: sock.user?.id });
 });
 
 app.post('/api/bot-toggle', auth, (req, res) => {
