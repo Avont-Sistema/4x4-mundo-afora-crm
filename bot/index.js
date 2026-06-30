@@ -106,23 +106,33 @@ async function connectWhatsApp() {
     }
   });
 
-  // Captura mapeamento @lid → @s.whatsapp.net enviado pelo WhatsApp
+  // Diagnóstico: loga todos os eventos de contato para encontrar mapeamento @lid
   sock.ev.on('contacts.upsert', (contacts) => {
+    console.log('[bot][diag] contacts.upsert:', JSON.stringify(contacts.slice(0, 3)));
     for (const c of contacts) {
       if (c.lid && c.id) {
         const lidKey = c.lid.includes('@') ? c.lid : `${c.lid}@lid`;
-        if (!lidToJid.has(lidKey)) {
-          lidToJid.set(lidKey, c.id);
-          console.log(`[bot] LID mapeado: ${lidKey} → ${c.id}`);
-        }
+        lidToJid.set(lidKey, c.id);
+        console.log(`[bot] LID mapeado: ${lidKey} → ${c.id}`);
       }
     }
   });
   sock.ev.on('contacts.update', (updates) => {
+    console.log('[bot][diag] contacts.update:', JSON.stringify(updates.slice(0, 3)));
     for (const c of updates) {
       if (c.lid && c.id) {
         const lidKey = c.lid.includes('@') ? c.lid : `${c.lid}@lid`;
         lidToJid.set(lidKey, c.id);
+      }
+    }
+  });
+  sock.ev.on('messaging-history.set', ({ contacts, chats }) => {
+    console.log('[bot][diag] messaging-history contacts sample:', JSON.stringify((contacts || []).slice(0, 3)));
+    for (const c of (contacts || [])) {
+      if (c.lid && c.id) {
+        const lidKey = c.lid.includes('@') ? c.lid : `${c.lid}@lid`;
+        lidToJid.set(lidKey, c.id);
+        console.log(`[bot] LID via history: ${lidKey} → ${c.id}`);
       }
     }
   });
