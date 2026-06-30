@@ -106,6 +106,27 @@ async function connectWhatsApp() {
     }
   });
 
+  // Captura mapeamento @lid → @s.whatsapp.net enviado pelo WhatsApp
+  sock.ev.on('contacts.upsert', (contacts) => {
+    for (const c of contacts) {
+      if (c.lid && c.id) {
+        const lidKey = c.lid.includes('@') ? c.lid : `${c.lid}@lid`;
+        if (!lidToJid.has(lidKey)) {
+          lidToJid.set(lidKey, c.id);
+          console.log(`[bot] LID mapeado: ${lidKey} → ${c.id}`);
+        }
+      }
+    }
+  });
+  sock.ev.on('contacts.update', (updates) => {
+    for (const c of updates) {
+      if (c.lid && c.id) {
+        const lidKey = c.lid.includes('@') ? c.lid : `${c.lid}@lid`;
+        lidToJid.set(lidKey, c.id);
+      }
+    }
+  });
+
   sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
     if (type !== 'notify') return;
 
@@ -182,7 +203,12 @@ async function connectWhatsApp() {
 
         if (data.reply) {
           try {
+            // Aguarda o mapeamento @lid caso ainda não tenha chegado
+            if (phone.includes('@lid') && !lidToJid.has(phone)) {
+              await new Promise(r => setTimeout(r, 2000));
+            }
             const sendJid = resolveSendJid(phone);
+            console.log(`[bot] Enviando para ${sendJid} (original: ${phone})`);
             await sock.sendMessage(sendJid, { text: data.reply }, { quoted: msg });
             conv.history.push({
               role: 'assistant',

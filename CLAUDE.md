@@ -1,5 +1,17 @@
 # CLAUDE.md - Configuração do Projeto 4x4 Mundo Afora CRM
 
+## 🖥️ Servidor de Infraestrutura
+
+> **IMPORTANTE**: O bot do WhatsApp roda em um servidor físico da AVONT, não no Vercel.
+> As instruções completas do servidor estão em `/opt/4x4-mundo-afora-crm/CLAUDE.md` **no servidor**.
+>
+> Resumo rápido para acesso:
+> - SSH: `ssh reges@100.113.229.99` (requer Tailscale logado com conta **Avont-Sistema@github**)
+> - Portainer: `https://100.113.229.99:9443`
+> - Container do bot: `4x4-bot` (porta `3002:8080`)
+> - Sessão WhatsApp salva em: `/opt/4x4-bot/auth/` — **nunca deletar**
+> - `CRM_URL` correta: `https://4x4-mundo-afora-crm-iota.vercel.app`
+
 ## 📋 Resumo do Projeto
 
 Sistema CRM completo para agência de turismo/expedições offroad **4x4 Mundo Afora**, desenvolvido em fases.
