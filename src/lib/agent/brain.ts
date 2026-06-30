@@ -159,17 +159,30 @@ async function fallbackReply(
     return expDetail(currentMention);
   }
 
-  // 2. Pediu detalhes / mais info sem citar nome → usa contexto do histórico
-  const wantsMore = m.match(/mais (detalhe|info|sobre)|detalhe|fale mais|me conta|me diz|como e|como funciona|o que (tem|inclui|incluso)/);
-  if (wantsMore) {
+  // 2. Pergunta sobre a expedição do contexto (sub-perguntas que não citam o nome)
+  const contextualQuestion = m.match(
+    /mais (detalhe|info|sobre)|detalhe|fale mais|me conta|me diz|como e|como funciona|o que (tem|inclui|incluso)|quantos dias|quanto tempo|duracao|itinerario|roteiro|foto|imagem|incluso|inclui|acampamento|hospedagem|refeicao|comida|dificuldade|nivel|precisa de|essa|nessa|dela|sobre ela/
+  );
+  if (contextualQuestion) {
     const contextExp = findLastMentionedExp([...history], allExp);
     if (contextExp) {
+      // Sub-perguntas específicas que o fallback não tem dados suficientes
+      if (m.match(/foto|imagem/)) {
+        return `Não tenho as fotos aqui no chat, mas você pode ver no nosso Instagram @4x4mundoafora 📸\n\nQuer mais informações sobre a ${contextExp.routeName} ou fechar sua vaga?`;
+      }
+      if (m.match(/quantos dias|quanto tempo|duracao/)) {
+        const start = contextExp.startDate ? new Date(contextExp.startDate) : null;
+        const end = contextExp.endDate ? new Date(contextExp.endDate) : null;
+        const dias = start && end ? Math.round((end.getTime() - start.getTime()) / 86400000) : null;
+        const durStr = dias ? `${dias} dias` : 'duração a confirmar';
+        return `A ${contextExp.routeName} tem ${durStr}${start ? `, saindo em ${start.toLocaleDateString('pt-BR')}` : ''}.\n\nQuer garantir sua vaga? Posso preparar o link de pagamento 😊`;
+      }
       return expDetail(contextExp);
     }
   }
 
-  // 3. Lista de expedições abertas
-  if (m.match(/prec|valor|quanto|expedi|proxim|disponi|opcao|opcoes|tem algo|quais/)) {
+  // 3. Lista de expedições abertas (só quando perguntando de forma genérica)
+  if (m.match(/prec|valor|expedi|proxim|disponi|opcao|opcoes|tem algo|quais/)) {
     if (openExp.length === 0) {
       return 'No momento estou organizando as próximas saídas. Me deixa seu nome que assim que abrir eu te aviso? 😊';
     }
