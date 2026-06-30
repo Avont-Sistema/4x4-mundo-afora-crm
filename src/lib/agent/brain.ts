@@ -196,25 +196,36 @@ async function fallbackReply(
     return `Temos estas expedições abertas:\n${lines.join('\n')}\n\nQual delas te interessa? Posso já reservar sua vaga.`;
   }
 
-  // 4. Pagamento / reserva
+  // 4. Quer falar com humano / atendente
+  if (m.match(/falar com|chamar|atendente|humano|pessoa|diego|michelle|gerente|responsavel|dono/)) {
+    return `Vou avisar nossa equipe para entrar em contato com você em breve! 😊\n\nSe quiser, pode também nos chamar direto no Instagram @4x4mundoafora.`;
+  }
+
+  // 5. Fornecedor / parceiro
+  if (m.match(/fornecedor|parceiro|parceria|hotel|restaurante|guia|prestador|servico/)) {
+    return `Olá! Para parcerias e fornecedores, entre em contato com nossa equipe:\n📸 Instagram: @4x4mundoafora\n📧 Email: regesjunioroficial8@gmail.com\n\nResponderemos em breve! 😊`;
+  }
+
+  // 6. Pagamento / reserva
   if (m.match(/pagar|pagamento|reserv|fechar|link|quero ir|vou querer|confirma/)) {
     const contextExp = findLastMentionedExp([...history], allExp);
     const expName = contextExp ? ` para a ${contextExp.routeName}` : '';
     return `Perfeito! Me confirma seu nome completo${expName ? expName : ' e qual expedição você quer'} que eu já preparo o link de pagamento seguro pra você 😊`;
   }
 
-  // 5. FAQs
+  // 7. FAQs
   if (m.match(/crianca|filho|criança/)) return negocio.faq.find((f) => f.pergunta === 'crianca')!.resposta;
   if (m.match(/inclui|incluso|pacote/)) return negocio.faq.find((f) => f.pergunta === 'incluso')!.resposta;
   if (m.match(/4x4|carro|veiculo|precisa/)) return negocio.faq.find((f) => f.pergunta === 'precisa de carro 4x4')!.resposta;
 
-  // 6. Saudação (só na primeira mensagem ou se for saudação pura)
+  // 8. Saudação pura
   if (m.match(/^(oi|ola|bom dia|boa tarde|boa noite|hey|hello|salve|tudo bem)/)) {
     return `Olá! 👋 Sou a assistente da ${negocio.empresa}. Posso te mostrar as expedições, valores e já reservar sua vaga. O que você procura?`;
   }
 
-  // 7. Contexto: se há expedição recente no histórico, oferece ajuda específica
-  const lastExp = findLastMentionedExp([...history], allExp);
+  // 9. Contexto: só usa expedição recente se as últimas mensagens ainda falam de expedição
+  const recentHistory = history.slice(-4);
+  const lastExp = findLastMentionedExp(recentHistory, allExp);
   if (lastExp) {
     return `Posso te ajudar com ${lastExp.routeName}: valor, vagas, datas ou fechar reserva. O que prefere? 😊`;
   }
