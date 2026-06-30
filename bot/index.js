@@ -146,10 +146,30 @@ async function connectWhatsApp() {
       const rawJid = msg.key.remoteJid;
       if (!rawJid || rawJid.includes('@g.us')) continue;
 
-      // @lid: usa senderPn (JID real do telefone) para envio
-      if (rawJid.includes('@lid') && msg.key.senderPn) {
-        lidToJid.set(rawJid, msg.key.senderPn);
-        console.log(`[bot] @lid resolvido via senderPn: ${rawJid} → ${msg.key.senderPn}`);
+      // @lid: resolve JID real via senderPn + verificação onWhatsApp
+      if (rawJid.includes('@lid') && msg.key.senderPn && !lidToJid.has(rawJid)) {
+        const pn = msg.key.senderPn.split('@')[0];
+        try {
+          const results = await sock.onWhatsApp(pn);
+          const found = results?.[0];
+          if (found?.exists && found?.jid) {
+            lidToJid.set(rawJid, found.jid);
+            console.log(`[bot] @lid resolvido via onWhatsApp: ${rawJid} → ${found.jid}`);
+          } else {
+            // Tenta com dígito 9 extra (padrão BR pós-2015)
+            const with9 = pn.startsWith('55') && pn.length === 12
+              ? pn.slice(0, 4) + '9' + pn.slice(4)
+              : null;
+            const results2 = with9 ? await sock.onWhatsApp(with9) : null;
+            const found2 = results2?.[0];
+            const jid = found2?.exists ? found2.jid : msg.key.senderPn;
+            lidToJid.set(rawJid, jid);
+            console.log(`[bot] @lid fallback: ${rawJid} → ${jid}`);
+          }
+        } catch (e) {
+          lidToJid.set(rawJid, msg.key.senderPn);
+          console.log(`[bot] onWhatsApp erro, usando senderPn: ${e.message}`);
+        }
       }
 
       const phone = rawJid;
