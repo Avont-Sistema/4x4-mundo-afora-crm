@@ -92,14 +92,24 @@ async function connectWhatsApp() {
       isConnected = false;
       currentQrData = null;
       const code = lastDisconnect?.error?.output?.statusCode;
-      const shouldReconnect = code !== DisconnectReason.loggedOut;
       sendSSE({ type: 'disconnected', code });
       console.log('[bot] Desconectado (código', code, ')');
-      if (shouldReconnect) {
+
+      if (code === DisconnectReason.loggedOut) {
+        // Sessão inválida: limpa arquivos e gera novo QR automaticamente
+        console.log('[bot] Logout detectado — limpando sessão e gerando novo QR...');
+        const authDir = path.join(__dirname, 'auth');
+        try {
+          for (const f of fs.readdirSync(authDir)) {
+            fs.rmSync(path.join(authDir, f), { force: true });
+          }
+        } catch (e) {
+          console.error('[bot] Erro ao limpar auth:', e.message);
+        }
+        setTimeout(connectWhatsApp, 2000);
+      } else {
         console.log('[bot] Reconectando em 5s...');
         setTimeout(connectWhatsApp, 5000);
-      } else {
-        console.log('[bot] Sessão encerrada (logout). Delete a pasta auth/ e reinicie.');
       }
     } else if (connection === 'open') {
       isConnected = true;
