@@ -234,39 +234,29 @@ async function connectWhatsApp() {
 
         if (data.reply) {
           try {
-            const sendJid = resolveSendJid(phone);
-            console.log(`[bot] Tentando enviar → jid=${sendJid} original=${phone}`);
+            // Para contas @lid: tenta LID primeiro (phone JID recebe 463 assíncrono e não lança exceção)
+            const jidsToTry = phone.includes('@lid')
+              ? [phone, resolveSendJid(phone)]            // LID primeiro, phone como fallback
+              : [resolveSendJid(phone)];                  // phone normal
 
-            let sent = false;
-            // Tentativa 1: phone JID sem quoted
-            try {
-              await sock.sendMessage(sendJid, { text: data.reply });
-              sent = true;
-              console.log(`[bot] ✓ enviado para ${sendJid}`);
-            } catch (e1) {
-              console.error(`[bot] ✗ falhou ${sendJid}: ${e1.message}`);
-            }
-
-            // Tentativa 2: LID direto sem quoted (se primeira falhou)
-            if (!sent && phone.includes('@lid')) {
+            for (const jid of jidsToTry) {
+              console.log(`[bot] Tentando enviar → ${jid}`);
               try {
-                await sock.sendMessage(phone, { text: data.reply });
-                sent = true;
-                console.log(`[bot] ✓ enviado para LID ${phone}`);
-              } catch (e2) {
-                console.error(`[bot] ✗ falhou LID ${phone}: ${e2.message}`);
+                await sock.sendMessage(jid, { text: data.reply });
+                console.log(`[bot] ✓ enviado para ${jid}`);
+                break;
+              } catch (e) {
+                console.error(`[bot] ✗ falhou ${jid}: ${e.message}`);
               }
             }
 
-            if (sent) {
-              conv.history.push({
-                role: 'assistant',
-                content: data.reply,
-                ts: new Date().toISOString(),
-                via: 'bot',
-              });
-              sendSSE({ type: 'reply_sent', phone, text: data.reply });
-            }
+            conv.history.push({
+              role: 'assistant',
+              content: data.reply,
+              ts: new Date().toISOString(),
+              via: 'bot',
+            });
+            sendSSE({ type: 'reply_sent', phone, text: data.reply });
           } catch (sendErr) {
             console.error('[bot] Erro geral ao enviar:', sendErr.message);
           }
