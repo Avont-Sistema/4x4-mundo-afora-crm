@@ -6,6 +6,8 @@ const {
   DisconnectReason,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
+  makeInMemoryStore,
+  jidNormalizedUser,
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const qrcode = require('qrcode');
@@ -21,6 +23,9 @@ const CONNECTOR_TOKEN = process.env.CONNECTOR_TOKEN || '';
 const app = express();
 app.use(express.json());
 
+// ── Store Baileys (resolve @lid → @s.whatsapp.net) ────────────────────────────
+const store = makeInMemoryStore({ logger: pino({ level: 'silent' }) });
+
 // ── Estado ────────────────────────────────────────────────────────────────────
 let sock           = null;
 let isConnected    = false;
@@ -29,6 +34,20 @@ let sseClients     = [];
 
 // Conversas em memória: phone → { phone, name, stage, botActive, history, ... }
 const conversations = new Map();
+
+// Resolve @lid para o JID real de envio usando o store
+function resolveSendJid(jid) {
+  if (!jid.includes('@lid')) return jid;
+  try {
+    const contacts = store.contacts || {};
+    for (const [contactJid, contact] of Object.entries(contacts)) {
+      if (contact.lid === jid || contact.lid === jid.split('@')[0]) {
+        return contactJid;
+      }
+    }
+  } catch {}
+  return jid; // fallback: tenta enviar mesmo assim
+}
 
 let settings = {
   alertMinutes:     20,
@@ -63,6 +82,8 @@ async function connectWhatsApp() {
     printQRInTerminal: true,
     browser: ['4x4 Bot', 'Chrome', '1.0.0'],
   });
+
+  store.bind(sock.ev); // mantém mapeamento @lid → @s.whatsapp.net
 
   sock.ev.on('creds.update', saveCreds);
 
@@ -170,8 +191,8 @@ async function connectWhatsApp() {
 
         if (data.reply) {
           try {
-            // Usa quoted para garantir entrega mesmo em JIDs @lid
-            await sock.sendMessage(phone, { text: data.reply }, { quoted: msg });
+            const sendJid = resolveSendJid(phone);
+            await sock.sendMessage(sendJid, { text: data.reply }, { quoted: msg });
             conv.history.push({
               role: 'assistant',
               content: data.reply,
@@ -294,10 +315,11 @@ app.post('/api/send', auth, async (req, res) => {
     let conv = conversations.get(phone);
     const quotedMsg = conv?.lastReceivedMsg;
     // usa quoted para garantir entrega em JIDs @lid
+    const sendJid = resolveSendJid(phone);
     if (quotedMsg) {
-      await sock.sendMessage(phone, { text }, { quoted: quotedMsg });
+      await sock.sendMessage(sendJid, { text }, { quoted: quotedMsg });
     } else {
-      await sock.sendMessage(phone, { text });
+      await sock.sendMessage(sendJid, { text });
     }
 
     if (!conv) {
