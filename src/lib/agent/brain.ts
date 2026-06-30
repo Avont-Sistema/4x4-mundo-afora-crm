@@ -56,7 +56,7 @@ export async function runAgent(
 ): Promise<{ reply: string; usedTools: string[] }> {
   const client = getClient();
   if (!client) {
-    return { reply: await fallbackReply(history[history.length - 1]?.content || ''), usedTools: [] };
+    return { reply: await fallbackReply(history[history.length - 1]?.content || '', history), usedTools: [] };
   }
 
   const system = masterPrompt(operatorNotes);
@@ -101,71 +101,110 @@ export async function runAgent(
   } catch (err: any) {
     console.error('[agent] erro na IA, usando fallback:', err?.message);
     return {
-      reply: await fallbackReply(history[history.length - 1]?.content || ''),
+      reply: await fallbackReply(history[history.length - 1]?.content || '', history),
       usedTools,
     };
   }
 }
 
 // ── Fallback sem IA ──────────────────────────────────────────────────────────
-async function fallbackReply(message: string): Promise<string> {
-  const m = message.toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, ''); // remove acentos para matching
+function normalize(s: string) {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
 
+function findExpeditionInText(text: string, allExp: Awaited<ReturnType<typeof expeditionsStore.all>>) {
+  const t = normalize(text);
+  return allExp.find((e) => {
+    const name = normalize(e.routeName);
+    return name.split(/\s+/).some((word) => word.length > 3 && t.includes(word));
+  });
+}
+
+function findLastMentionedExp(
+  history: { role: string; content: string }[],
+  allExp: Awaited<ReturnType<typeof expeditionsStore.all>>
+) {
+  // Varre histórico do mais recente para o mais antigo
+  for (let i = history.length - 1; i >= 0; i--) {
+    const found = findExpeditionInText(history[i].content, allExp);
+    if (found) return found;
+  }
+  return null;
+}
+
+async function expDetail(exp: Awaited<ReturnType<typeof expeditionsStore.all>>[number]): Promise<string> {
+  const d = await buildExpeditionDetail(exp);
+  const price = exp.pricePerPerson > 0
+    ? `R$ ${exp.pricePerPerson.toLocaleString('pt-BR')} por pessoa`
+    : 'valor a confirmar (entre em contato)';
+  const vagas = d.finance.slotsAvailable;
+  const status = vagas > 0 ? `${vagas} vagas disponíveis` : 'sem vagas no momento';
+  const dates = exp.startDate
+    ? `Saída: ${new Date(exp.startDate).toLocaleDateString('pt-BR')}.`
+    : '';
+  return `*${exp.routeName}*\n${dates}\nValor: ${price}\nVagas: ${status}\n\nQuer reservar ou tem mais alguma dúvida?`;
+}
+
+async function fallbackReply(
+  message: string,
+  history: { role: string; content: string }[] = []
+): Promise<string> {
+  const m = normalize(message);
   const allExp = await expeditionsStore.all();
   const openExp = allExp.filter((e) => e.status === 'aberta' || e.status === 'em_andamento');
 
-  // Busca por nome de expedição específica na mensagem
-  const mentionedExp = allExp.find((e) => {
-    const name = e.routeName.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-    return name.split(/\s+/).some((word) => word.length > 3 && m.includes(word));
-  });
-
-  if (mentionedExp) {
-    const d = await buildExpeditionDetail(mentionedExp);
-    const price = mentionedExp.pricePerPerson > 0
-      ? `R$ ${mentionedExp.pricePerPerson.toLocaleString('pt-BR')} por pessoa`
-      : 'valor a confirmar';
-    const vagas = d.finance.slotsAvailable;
-    const status = vagas > 0 ? `${vagas} vagas disponíveis` : 'sem vagas no momento';
-    return `${mentionedExp.routeName}: ${price}, ${status}. Quer garantir sua vaga ou saber mais detalhes?`;
+  // 1. Expedição mencionada na mensagem atual
+  const currentMention = findExpeditionInText(message, allExp);
+  if (currentMention) {
+    return expDetail(currentMention);
   }
 
-  if (m.includes('prec') || m.includes('valor') || m.includes('quanto') || m.includes('expedi') || m.includes('proxim') || m.includes('disponi') || m.includes('opcao') || m.includes('opcoes')) {
+  // 2. Pediu detalhes / mais info sem citar nome → usa contexto do histórico
+  const wantsMore = m.match(/mais (detalhe|info|sobre)|detalhe|fale mais|me conta|me diz|como e|como funciona|o que (tem|inclui|incluso)/);
+  if (wantsMore) {
+    const contextExp = findLastMentionedExp([...history], allExp);
+    if (contextExp) {
+      return expDetail(contextExp);
+    }
+  }
+
+  // 3. Lista de expedições abertas
+  if (m.match(/prec|valor|quanto|expedi|proxim|disponi|opcao|opcoes|tem algo|quais/)) {
     if (openExp.length === 0) {
       return 'No momento estou organizando as próximas saídas. Me deixa seu nome que assim que abrir eu te aviso? 😊';
     }
     const lines = await Promise.all(
       openExp.map(async (e) => {
         const d = await buildExpeditionDetail(e);
-        const price = e.pricePerPerson > 0 ? `R$ ${e.pricePerPerson.toLocaleString('pt-BR')}` : 'consultar';
+        const price = e.pricePerPerson > 0 ? `R$ ${e.pricePerPerson.toLocaleString('pt-BR')}` : 'a consultar';
         return `• ${e.routeName} — ${price} por pessoa (${d.finance.slotsAvailable} vagas)`;
       })
     );
     return `Temos estas expedições abertas:\n${lines.join('\n')}\n\nQual delas te interessa? Posso já reservar sua vaga.`;
   }
 
-  if (m.includes('pagar') || m.includes('pagamento') || m.includes('reserv') || m.includes('fechar') || m.includes('link')) {
-    return 'Perfeito! Me confirma seu nome completo e qual expedição você quer que eu já preparo o link de pagamento seguro pra você 😊';
+  // 4. Pagamento / reserva
+  if (m.match(/pagar|pagamento|reserv|fechar|link|quero ir|vou querer|confirma/)) {
+    const contextExp = findLastMentionedExp([...history], allExp);
+    const expName = contextExp ? ` para a ${contextExp.routeName}` : '';
+    return `Perfeito! Me confirma seu nome completo${expName ? expName : ' e qual expedição você quer'} que eu já preparo o link de pagamento seguro pra você 😊`;
   }
 
-  if (m.includes('crianca') || m.includes('filho')) {
-    return negocio.faq.find((f) => f.pergunta === 'crianca')!.resposta;
-  }
+  // 5. FAQs
+  if (m.match(/crianca|filho|criança/)) return negocio.faq.find((f) => f.pergunta === 'crianca')!.resposta;
+  if (m.match(/inclui|incluso|pacote/)) return negocio.faq.find((f) => f.pergunta === 'incluso')!.resposta;
+  if (m.match(/4x4|carro|veiculo|precisa/)) return negocio.faq.find((f) => f.pergunta === 'precisa de carro 4x4')!.resposta;
 
-  if (m.includes('inclui') || m.includes('incluso') || m.includes('inclui') || m.includes('pacote')) {
-    return negocio.faq.find((f) => f.pergunta === 'incluso')!.resposta;
-  }
-
-  if (m.includes('4x4') || m.includes('carro') || m.includes('veiculo') || m.includes('precisa')) {
-    return negocio.faq.find((f) => f.pergunta === 'precisa de carro 4x4')!.resposta;
-  }
-
-  // Saudações — responde sem repetir o "Olá!" se não for a primeira mensagem
-  if (m.match(/^(oi|ola|bom dia|boa tarde|boa noite|hey|hello|tudo|salve)/)) {
+  // 6. Saudação (só na primeira mensagem ou se for saudação pura)
+  if (m.match(/^(oi|ola|bom dia|boa tarde|boa noite|hey|hello|salve|tudo bem)/)) {
     return `Olá! 👋 Sou a assistente da ${negocio.empresa}. Posso te mostrar as expedições, valores e já reservar sua vaga. O que você procura?`;
   }
 
-  // Resposta genérica contextual (não repete saudação)
+  // 7. Contexto: se há expedição recente no histórico, oferece ajuda específica
+  const lastExp = findLastMentionedExp([...history], allExp);
+  if (lastExp) {
+    return `Posso te ajudar com ${lastExp.routeName}: valor, vagas, datas ou fechar reserva. O que prefere? 😊`;
+  }
+
   return `Pode me contar mais? Consigo te ajudar com informações sobre expedições, valores, vagas e reservas. 😊`;
 }
