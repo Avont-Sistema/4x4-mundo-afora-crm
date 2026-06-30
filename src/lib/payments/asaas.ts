@@ -2,23 +2,24 @@
 // Docs: https://docs.asaas.com
 import { resolve } from '@/lib/integrationsStore';
 
-function apiKey() {
-  return resolve().asaasApiKey;
+async function apiKey() {
+  return (await resolve()).asaasApiKey;
 }
-function baseUrl() {
-  return resolve().asaasEnv === 'production'
+async function baseUrl() {
+  return (await resolve()).asaasEnv === 'production'
     ? 'https://api.asaas.com/v3'
     : 'https://api-sandbox.asaas.com/v3';
 }
 
-export const isAsaasEnabled = () => Boolean(apiKey());
+export const isAsaasEnabled = async () => Boolean(await apiKey());
 
 async function asaas(path: string, init?: RequestInit) {
-  const res = await fetch(`${baseUrl()}${path}`, {
+  const [key, base] = await Promise.all([apiKey(), baseUrl()]);
+  const res = await fetch(`${base}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      access_token: apiKey(),
+      access_token: key,
       ...(init?.headers || {}),
     },
   });

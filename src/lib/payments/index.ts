@@ -41,7 +41,7 @@ function buildExternalRef(input: ChargeInput): string {
 
 export async function createCharge(input: ChargeInput): Promise<ChargeResult> {
   // Asaas exige CPF/CNPJ. Com chave + CPF => fluxo completo (PIX/cartão/parcelado, auto-confirma).
-  if (isAsaasEnabled() && input.cpf) {
+  if ((await isAsaasEnabled()) && input.cpf) {
     const customerId = await createCustomer({
       name: input.clientName,
       cpfCnpj: input.cpf.replace(/\D/g, ''),
@@ -70,7 +70,7 @@ export async function createCharge(input: ChargeInput): Promise<ChargeResult> {
   }
 
   // Fallback grátis: PIX copia-e-cola com a sua chave (confirmação manual)
-  const r = resolve();
+  const r = await resolve();
   if (r.pixKey) {
     const payload = buildPixPayload({
       key: r.pixKey,

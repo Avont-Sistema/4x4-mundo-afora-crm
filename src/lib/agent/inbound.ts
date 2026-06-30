@@ -57,18 +57,20 @@ export async function processInbound(
   }
 
   // 3. bot pausado ou conversa em modo humano/resolvido => não responde
+  const ai = await aiEnabled();
+
   if (settings.botPaused) {
-    return { reply: null, mode: conv.mode, leadCreated, aiEnabled: aiEnabled(), reason: 'bot_paused' };
+    return { reply: null, mode: conv.mode, leadCreated, aiEnabled: ai, reason: 'bot_paused' };
   }
   if (conv.mode !== 'bot') {
-    return { reply: null, mode: conv.mode, leadCreated, aiEnabled: aiEnabled(), reason: 'human_mode' };
+    return { reply: null, mode: conv.mode, leadCreated, aiEnabled: ai, reason: 'human_mode' };
   }
 
   // 4. fora do horário comercial => resposta automática fixa
   if (!isWithinBusinessHours()) {
     const msg = settings.outOfHoursMessage;
     appendMessage(phone, { role: 'assistant', content: msg, via: 'bot' });
-    return { reply: msg, mode: conv.mode, leadCreated, aiEnabled: aiEnabled(), reason: 'out_of_hours' };
+    return { reply: msg, mode: conv.mode, leadCreated, aiEnabled: ai, reason: 'out_of_hours' };
   }
 
   // 5. roda o agente
@@ -77,5 +79,5 @@ export async function processInbound(
 
   appendMessage(phone, { role: 'assistant', content: reply, via: 'bot' });
 
-  return { reply, mode: conv.mode, leadCreated, aiEnabled: aiEnabled() };
+  return { reply, mode: conv.mode, leadCreated, aiEnabled: ai };
 }

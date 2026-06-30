@@ -6,28 +6,28 @@ import { resolve } from '@/lib/integrationsStore';
 
 const MAX_HISTORY = 20;
 
-function getClient(): OpenAI | null {
-  const key = resolve().deepseekApiKey;
+async function getClient(): Promise<OpenAI | null> {
+  const key = (await resolve()).deepseekApiKey;
   return key
     ? new OpenAI({ apiKey: key, baseURL: 'https://api.deepseek.com' })
     : null;
 }
 
-function getModel(): string {
-  return resolve().agentModel || 'deepseek-chat';
+async function getModel(): Promise<string> {
+  return (await resolve()).agentModel || 'deepseek-chat';
 }
 
-export const aiEnabled = () => Boolean(resolve().deepseekApiKey);
+export const aiEnabled = async () => Boolean((await resolve()).deepseekApiKey);
 
 type Msg = OpenAI.Chat.ChatCompletionMessageParam;
 
 // ── Triagem ──────────────────────────────────────────────────────────────
 export async function classify(message: string): Promise<string> {
-  const client = getClient();
+  const client = await getClient();
   if (!client) return 'INFO';
   try {
     const res = await client.chat.completions.create({
-      model: getModel(),
+      model: await getModel(),
       max_tokens: 10,
       messages: [
         {
@@ -54,7 +54,7 @@ export async function runAgent(
   history: { role: 'user' | 'assistant'; content: string }[],
   operatorNotes?: string
 ): Promise<{ reply: string; usedTools: string[] }> {
-  const client = getClient();
+  const client = await getClient();
   if (!client) {
     return { reply: await fallbackReply(history[history.length - 1]?.content || '', history), usedTools: [] };
   }
@@ -65,7 +65,7 @@ export async function runAgent(
     ...history.slice(-MAX_HISTORY).map((m) => ({ role: m.role, content: m.content } as Msg)),
   ];
   const usedTools: string[] = [];
-  const model = getModel();
+  const model = await getModel();
 
   try {
     for (let i = 0; i < 6; i++) {

@@ -28,7 +28,7 @@ import { resolve } from '@/lib/integrationsStore';
 
 // Token de verificação (configurável em Configurações → Integrações).
 // Envie o mesmo valor no header "x-webhook-token" a partir da plataforma de anúncios.
-const token = () => resolve().leadsWebhookToken;
+const token = async () => (await resolve()).leadsWebhookToken;
 
 function parseMetaLeadAds(body: any): Partial<CreateLeadInput> {
   const out: Partial<CreateLeadInput> = {};
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     const source = (searchParams.get('source') as LeadSource) || 'other';
 
     // Verificação de token (opcional — só valida se o token estiver configurado)
-    const WEBHOOK_TOKEN = token();
+    const WEBHOOK_TOKEN = await token();
     if (WEBHOOK_TOKEN) {
       const headerToken = request.headers.get('x-webhook-token');
       if (headerToken !== WEBHOOK_TOKEN) {
@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
   const challenge = searchParams.get('hub.challenge');
   const verifyToken = searchParams.get('hub.verify_token');
 
-  const WEBHOOK_TOKEN = token();
+  const WEBHOOK_TOKEN = await token();
   if (challenge && (!WEBHOOK_TOKEN || verifyToken === WEBHOOK_TOKEN)) {
     return new NextResponse(challenge, { status: 200 });
   }

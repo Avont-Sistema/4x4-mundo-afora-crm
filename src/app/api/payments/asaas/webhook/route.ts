@@ -7,7 +7,7 @@ import { resolve } from '@/lib/integrationsStore';
 // Opcional: token em Configurações → Integrações, header "asaas-access-token".
 export async function POST(request: NextRequest) {
   try {
-    const TOKEN = resolve().asaasWebhookToken;
+    const TOKEN = (await resolve()).asaasWebhookToken;
     if (TOKEN) {
       const t = request.headers.get('asaas-access-token');
       if (t !== TOKEN) {

@@ -5,7 +5,7 @@ import { resolve } from '@/lib/integrationsStore';
 // body: { target: 'anthropic' | 'asaas' | 'whatsapp' }
 export async function POST(request: NextRequest) {
   const { target } = await request.json();
-  const r = resolve();
+  const r = await resolve();
 
   try {
     if (target === 'deepseek') {

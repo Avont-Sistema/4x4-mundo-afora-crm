@@ -11,7 +11,7 @@ import { resolve } from '@/lib/integrationsStore';
  */
 export async function POST(request: NextRequest) {
   try {
-    const TOKEN = resolve().whatsappConnectorToken;
+    const TOKEN = (await resolve()).whatsappConnectorToken;
     if (TOKEN) {
       const t = request.headers.get('x-connector-token');
       if (t !== TOKEN) {
