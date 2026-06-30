@@ -71,6 +71,9 @@ async function connectWhatsApp() {
     logger: pino({ level: 'warn' }),
     printQRInTerminal: true,
     browser: ['4x4 Bot', 'Chrome', '1.0.0'],
+    connectTimeoutMs: 90_000,
+    defaultQueryTimeoutMs: 90_000,
+    keepAliveIntervalMs: 30_000,
   });
 
   sock.ev.on('creds.update', saveCreds);
