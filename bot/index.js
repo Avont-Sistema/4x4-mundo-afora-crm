@@ -144,13 +144,21 @@ async function connectWhatsApp() {
       if (!msg.message || msg.key.fromMe) continue;
 
       const rawJid = msg.key.remoteJid;
-      if (!rawJid || rawJid.includes('@g.us')) continue; // ignora grupos
+      if (!rawJid || rawJid.includes('@g.us')) continue;
 
-      // Captura mapeamento @lid → @s.whatsapp.net quando disponível na mensagem
-      if (rawJid.includes('@lid') && msg.key.participant) {
-        lidToJid.set(rawJid, msg.key.participant);
+      // Log completo da mensagem @lid para diagnóstico
+      if (rawJid.includes('@lid')) {
+        console.log('[bot][diag] msg @lid completo:', JSON.stringify({
+          key: msg.key,
+          pushName: msg.pushName,
+          participant: msg.participant,
+          messageStubType: msg.messageStubType,
+          messageStubParameters: msg.messageStubParameters,
+          verifiedBizName: msg.verifiedBizName,
+          broadcast: msg.broadcast,
+        }));
       }
-      // Tenta também via verifiedBizName ou status do contato
+
       const phone = rawJid;
 
       const text =
