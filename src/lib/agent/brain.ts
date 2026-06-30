@@ -109,19 +109,37 @@ export async function runAgent(
 
 // ── Fallback sem IA ──────────────────────────────────────────────────────────
 async function fallbackReply(message: string): Promise<string> {
-  const m = message.toLowerCase();
+  const m = message.toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, ''); // remove acentos para matching
 
-  if (m.includes('preç') || m.includes('valor') || m.includes('quanto') || m.includes('expedi') || m.includes('próxim') || m.includes('proxim') || m.includes('disponí')) {
-    const open = (await expeditionsStore.all()).filter(
-      (e) => e.status === 'aberta' || e.status === 'em_andamento'
-    );
-    if (open.length === 0) {
+  const allExp = await expeditionsStore.all();
+  const openExp = allExp.filter((e) => e.status === 'aberta' || e.status === 'em_andamento');
+
+  // Busca por nome de expedição específica na mensagem
+  const mentionedExp = allExp.find((e) => {
+    const name = e.routeName.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    return name.split(/\s+/).some((word) => word.length > 3 && m.includes(word));
+  });
+
+  if (mentionedExp) {
+    const d = await buildExpeditionDetail(mentionedExp);
+    const price = mentionedExp.pricePerPerson > 0
+      ? `R$ ${mentionedExp.pricePerPerson.toLocaleString('pt-BR')} por pessoa`
+      : 'valor a confirmar';
+    const vagas = d.finance.slotsAvailable;
+    const status = vagas > 0 ? `${vagas} vagas disponíveis` : 'sem vagas no momento';
+    return `${mentionedExp.routeName}: ${price}, ${status}. Quer garantir sua vaga ou saber mais detalhes?`;
+  }
+
+  if (m.includes('prec') || m.includes('valor') || m.includes('quanto') || m.includes('expedi') || m.includes('proxim') || m.includes('disponi') || m.includes('opcao') || m.includes('opcoes')) {
+    if (openExp.length === 0) {
       return 'No momento estou organizando as próximas saídas. Me deixa seu nome que assim que abrir eu te aviso? 😊';
     }
     const lines = await Promise.all(
-      open.map(async (e) => {
+      openExp.map(async (e) => {
         const d = await buildExpeditionDetail(e);
-        return `• ${e.routeName} — R$ ${e.pricePerPerson.toLocaleString('pt-BR')} por pessoa (${d.finance.slotsAvailable} vagas)`;
+        const price = e.pricePerPerson > 0 ? `R$ ${e.pricePerPerson.toLocaleString('pt-BR')}` : 'consultar';
+        return `• ${e.routeName} — ${price} por pessoa (${d.finance.slotsAvailable} vagas)`;
       })
     );
     return `Temos estas expedições abertas:\n${lines.join('\n')}\n\nQual delas te interessa? Posso já reservar sua vaga.`;
@@ -131,9 +149,23 @@ async function fallbackReply(message: string): Promise<string> {
     return 'Perfeito! Me confirma seu nome completo e qual expedição você quer que eu já preparo o link de pagamento seguro pra você 😊';
   }
 
-  if (m.includes('criança') || m.includes('crianca') || m.includes('filho')) {
+  if (m.includes('crianca') || m.includes('filho')) {
     return negocio.faq.find((f) => f.pergunta === 'crianca')!.resposta;
   }
 
-  return `Olá! 👋 Sou a assistente da ${negocio.empresa}. Posso te mostrar as expedições, valores e já reservar sua vaga. O que você procura?`;
+  if (m.includes('inclui') || m.includes('incluso') || m.includes('inclui') || m.includes('pacote')) {
+    return negocio.faq.find((f) => f.pergunta === 'incluso')!.resposta;
+  }
+
+  if (m.includes('4x4') || m.includes('carro') || m.includes('veiculo') || m.includes('precisa')) {
+    return negocio.faq.find((f) => f.pergunta === 'precisa de carro 4x4')!.resposta;
+  }
+
+  // Saudações — responde sem repetir o "Olá!" se não for a primeira mensagem
+  if (m.match(/^(oi|ola|bom dia|boa tarde|boa noite|hey|hello|tudo|salve)/)) {
+    return `Olá! 👋 Sou a assistente da ${negocio.empresa}. Posso te mostrar as expedições, valores e já reservar sua vaga. O que você procura?`;
+  }
+
+  // Resposta genérica contextual (não repete saudação)
+  return `Pode me contar mais? Consigo te ajudar com informações sobre expedições, valores, vagas e reservas. 😊`;
 }
