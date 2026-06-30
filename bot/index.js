@@ -146,17 +146,10 @@ async function connectWhatsApp() {
       const rawJid = msg.key.remoteJid;
       if (!rawJid || rawJid.includes('@g.us')) continue;
 
-      // Log completo da mensagem @lid para diagnóstico
-      if (rawJid.includes('@lid')) {
-        console.log('[bot][diag] msg @lid completo:', JSON.stringify({
-          key: msg.key,
-          pushName: msg.pushName,
-          participant: msg.participant,
-          messageStubType: msg.messageStubType,
-          messageStubParameters: msg.messageStubParameters,
-          verifiedBizName: msg.verifiedBizName,
-          broadcast: msg.broadcast,
-        }));
+      // @lid: usa senderPn (JID real do telefone) para envio
+      if (rawJid.includes('@lid') && msg.key.senderPn) {
+        lidToJid.set(rawJid, msg.key.senderPn);
+        console.log(`[bot] @lid resolvido via senderPn: ${rawJid} → ${msg.key.senderPn}`);
       }
 
       const phone = rawJid;
