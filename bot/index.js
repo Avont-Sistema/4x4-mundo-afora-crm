@@ -103,8 +103,12 @@ async function connectWhatsApp() {
     for (const msg of msgs) {
       if (!msg.message || msg.key.fromMe) continue;
 
-      const phone = msg.key.remoteJid;
-      if (!phone || phone.includes('@g.us')) continue; // ignora grupos
+      const rawJid = msg.key.remoteJid;
+      if (!rawJid || rawJid.includes('@g.us')) continue; // ignora grupos
+
+      // @lid é o novo formato interno do WhatsApp — normaliza para @s.whatsapp.net
+      // usando o número do participante se disponível, senão mantém o @lid
+      const phone = rawJid;
 
       const text =
         msg.message.conversation ||
@@ -132,6 +136,7 @@ async function connectWhatsApp() {
           waitingMinutes: null,
           alertedOperator: false,
           history: [],
+          lastReceivedMsg: null,
         });
       }
 
@@ -140,6 +145,7 @@ async function connectWhatsApp() {
       conv.lastMessage       = text;
       conv.updatedAt         = new Date().toISOString();
       conv.lastUserMessageAt = new Date().toISOString();
+      conv.lastReceivedMsg   = msg; // salva para usar como quoted no envio manual
       // cliente respondeu → reseta follow-ups para não enviar novamente
       conv.followup1SentAt   = null;
       conv.followup2SentAt   = null;
@@ -163,15 +169,20 @@ async function connectWhatsApp() {
         const data = await res.json();
 
         if (data.reply) {
-          await sock.sendMessage(phone, { text: data.reply });
-          conv.history.push({
-            role: 'assistant',
-            content: data.reply,
-            ts: new Date().toISOString(),
-            via: 'bot',
-          });
-          sendSSE({ type: 'reply_sent', phone, text: data.reply });
-          console.log(`[bot] → ${phone}: ${data.reply.slice(0, 60)}...`);
+          try {
+            // Usa quoted para garantir entrega mesmo em JIDs @lid
+            await sock.sendMessage(phone, { text: data.reply }, { quoted: msg });
+            conv.history.push({
+              role: 'assistant',
+              content: data.reply,
+              ts: new Date().toISOString(),
+              via: 'bot',
+            });
+            sendSSE({ type: 'reply_sent', phone, text: data.reply });
+            console.log(`[bot] → ${phone}: ${data.reply.slice(0, 60)}...`);
+          } catch (sendErr) {
+            console.error('[bot] Erro ao enviar mensagem:', sendErr.message);
+          }
         }
       } catch (err) {
         console.error('[bot] Erro ao chamar CRM:', err.message);
@@ -280,15 +291,21 @@ app.post('/api/send', auth, async (req, res) => {
   if (!isConnected || !sock) return res.status(503).json({ error: 'WhatsApp não conectado' });
 
   try {
-    await sock.sendMessage(phone, { text });
-
     let conv = conversations.get(phone);
+    const quotedMsg = conv?.lastReceivedMsg;
+    // usa quoted para garantir entrega em JIDs @lid
+    if (quotedMsg) {
+      await sock.sendMessage(phone, { text }, { quoted: quotedMsg });
+    } else {
+      await sock.sendMessage(phone, { text });
+    }
+
     if (!conv) {
       conv = {
         phone, name: phone, stage: 'human', botActive: false,
         expeditionInterest: null, lastMessage: text,
         updatedAt: new Date().toISOString(),
-        waitingMinutes: null, alertedOperator: false, history: [],
+        waitingMinutes: null, alertedOperator: false, history: [], lastReceivedMsg: null,
       };
       conversations.set(phone, conv);
     }
