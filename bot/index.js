@@ -6,8 +6,6 @@ const {
   DisconnectReason,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
-  makeInMemoryStore,
-  jidNormalizedUser,
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const qrcode = require('qrcode');
@@ -23,9 +21,6 @@ const CONNECTOR_TOKEN = process.env.CONNECTOR_TOKEN || '';
 const app = express();
 app.use(express.json());
 
-// ── Store Baileys (resolve @lid → @s.whatsapp.net) ────────────────────────────
-const store = makeInMemoryStore({ logger: pino({ level: 'silent' }) });
-
 // ── Estado ────────────────────────────────────────────────────────────────────
 let sock           = null;
 let isConnected    = false;
@@ -35,18 +30,13 @@ let sseClients     = [];
 // Conversas em memória: phone → { phone, name, stage, botActive, history, ... }
 const conversations = new Map();
 
-// Resolve @lid para o JID real de envio usando o store
+// Mapeamento manual @lid → @s.whatsapp.net (populado ao receber mensagens)
+const lidToJid = new Map();
+
+// Resolve @lid para o JID real de envio
 function resolveSendJid(jid) {
   if (!jid.includes('@lid')) return jid;
-  try {
-    const contacts = store.contacts || {};
-    for (const [contactJid, contact] of Object.entries(contacts)) {
-      if (contact.lid === jid || contact.lid === jid.split('@')[0]) {
-        return contactJid;
-      }
-    }
-  } catch {}
-  return jid; // fallback: tenta enviar mesmo assim
+  return lidToJid.get(jid) || jid;
 }
 
 let settings = {
@@ -82,8 +72,6 @@ async function connectWhatsApp() {
     printQRInTerminal: true,
     browser: ['4x4 Bot', 'Chrome', '1.0.0'],
   });
-
-  store.bind(sock.ev); // mantém mapeamento @lid → @s.whatsapp.net
 
   sock.ev.on('creds.update', saveCreds);
 
@@ -127,8 +115,11 @@ async function connectWhatsApp() {
       const rawJid = msg.key.remoteJid;
       if (!rawJid || rawJid.includes('@g.us')) continue; // ignora grupos
 
-      // @lid é o novo formato interno do WhatsApp — normaliza para @s.whatsapp.net
-      // usando o número do participante se disponível, senão mantém o @lid
+      // Captura mapeamento @lid → @s.whatsapp.net quando disponível na mensagem
+      if (rawJid.includes('@lid') && msg.key.participant) {
+        lidToJid.set(rawJid, msg.key.participant);
+      }
+      // Tenta também via verifiedBizName ou status do contato
       const phone = rawJid;
 
       const text =
