@@ -236,11 +236,15 @@ export default function WhatsAppPage() {
   }, [loadConversations, loadStatus]);
 
   useEffect(() => {
-    if (configOpen) {
-      loadSettings();
-      loadQR();
-    }
-  }, [configOpen, loadSettings, loadQR]);
+    if (!configOpen) return;
+    loadSettings();
+    loadQR();
+    // Auto-refresh QR a cada 8s enquanto não conectado
+    const iv = setInterval(() => {
+      if (!qrData?.connected) loadQR();
+    }, 8000);
+    return () => clearInterval(iv);
+  }, [configOpen, loadSettings, loadQR, qrData?.connected]);
 
   // ── Auto-scroll ───────────────────────────────────────────────────────────
 
