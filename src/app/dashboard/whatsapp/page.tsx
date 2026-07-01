@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ArrowLeft, Send, Bot, PauseCircle, Wifi, WifiOff,
   AlertTriangle, RefreshCw, QrCode, Phone,
-  Settings, X, Save, Trash2, Loader2,
+  Settings, X, Save, Trash2, Loader2, Upload, Link,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -101,34 +101,33 @@ export default function WhatsAppPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // ── Config panel ──────────────────────────────────────────────────────────
-  const [configOpen, setConfigOpen]       = useState(false);
-  const [configTab, setConfigTab]         = useState<'rules' | 'chat'>('rules');
-  const [settings, setSettings]           = useState<BotSettings>(DEFAULT_SETTINGS);
+  const [configOpen, setConfigOpen]         = useState(false);
+  const [configTab, setConfigTab]           = useState<'connection' | 'rules' | 'training'>('training');
+  const [settings, setSettings]             = useState<BotSettings>(DEFAULT_SETTINGS);
   const [savingSettings, setSavingSettings] = useState(false);
-  const [metaMessages, setMetaMessages]   = useState<Message[]>([]);
-  const [metaInput, setMetaInput]         = useState('');
-  const [metaLoading, setMetaLoading]     = useState(false);
-  const metaEndRef = useRef<HTMLDivElement>(null);
-  const [qrData, setQrData]               = useState<{ connected: boolean; qr: string | null; offline?: boolean } | null>(null);
-  const [qrLoading, setQrLoading]         = useState(false);
+  const [qrData, setQrData]                 = useState<{ connected: boolean; qr: string | null; offline?: boolean } | null>(null);
+  const [qrLoading, setQrLoading]           = useState(false);
+
+  // ── Treinamento ───────────────────────────────────────────────────────────
+  interface TrainAttachment { type: 'image' | 'audio' | 'video' | 'link'; url: string; name: string; }
+  interface TrainMessage { role: 'user' | 'assistant'; content: string; attachments?: TrainAttachment[]; actionsCreated?: string[]; at: string; }
+  const [trainHistory, setTrainHistory]     = useState<TrainMessage[]>([]);
+  const [trainInput, setTrainInput]         = useState('');
+  const [trainAttachments, setTrainAttachments] = useState<TrainAttachment[]>([]);
+  const [trainLoading, setTrainLoading]     = useState(false);
+  const [uploadingFile, setUploadingFile]   = useState(false);
+  const trainEndRef = useRef<HTMLDivElement>(null);
+  const trainFileRef = useRef<HTMLInputElement>(null);
 
   // ── Config: load / save / meta-chat ──────────────────────────────────────
 
   const loadSettings = useCallback(async () => {
     try {
-      const [sr, mr, crmr] = await Promise.all([
+      const [sr, crmr] = await Promise.all([
         fetch('/api/whatsapp/bot-settings'),
-        fetch('/api/whatsapp/meta-chat'),
         fetch('/api/whatsapp/settings'),
       ]);
       if (sr.ok) setSettings(await sr.json());
-      if (mr.ok) {
-        const md = await mr.json();
-        setMetaMessages(md.history || []);
-        if (md.operatorNotes !== undefined) {
-          setSettings((s) => ({ ...s, operatorNotes: md.operatorNotes }));
-        }
-      }
       if (crmr.ok) {
         const crm = await crmr.json();
         if (crm.settings?.typingDelaySeconds !== undefined) {
@@ -170,31 +169,70 @@ export default function WhatsAppPage() {
     finally { setSavingSettings(false); }
   };
 
-  const sendMetaChat = async () => {
-    const msg = metaInput.trim();
-    if (!msg || metaLoading) return;
-    setMetaInput('');
-    setMetaLoading(true);
-    setMetaMessages((m) => [...m, { role: 'user', content: msg }]);
+
+  // ── Treinamento ───────────────────────────────────────────────────────────
+
+  const loadTrainHistory = useCallback(async () => {
     try {
-      const res = await fetch('/api/whatsapp/meta-chat', {
+      const res = await fetch('/api/whatsapp/train');
+      if (res.ok) { const d = await res.json(); setTrainHistory(d.history || []); }
+    } catch { /* ignore */ }
+  }, []);
+
+  const handleFileAttach = async (file: File) => {
+    setUploadingFile(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Erro no upload'); return; }
+      const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'audio' : 'video';
+      setTrainAttachments((a) => [...a, { type, url: data.url, name: file.name }]);
+    } catch { toast.error('Falha no upload'); }
+    finally { setUploadingFile(false); }
+  };
+
+  const addLinkAttachment = (url: string) => {
+    if (!url.trim()) return;
+    setTrainAttachments((a) => [...a, { type: 'link', url: url.trim(), name: url.trim() }]);
+  };
+
+  const sendTraining = async () => {
+    if (!trainInput.trim() && trainAttachments.length === 0) return;
+    if (trainLoading) return;
+    const msg = trainInput;
+    const atts = [...trainAttachments];
+    setTrainInput('');
+    setTrainAttachments([]);
+    setTrainLoading(true);
+    setTrainHistory((h) => [...h, { role: 'user', content: msg, attachments: atts.length > 0 ? atts : undefined, at: new Date().toISOString() }]);
+    setTimeout(() => trainEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+    try {
+      const res = await fetch('/api/whatsapp/train', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg }),
+        body: JSON.stringify({ message: msg, attachments: atts }),
       });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || 'Erro'); return; }
-      setMetaMessages((m) => [...m, { role: 'assistant', content: data.reply }]);
-      setSettings((s) => ({ ...s, operatorNotes: data.operatorNotes }));
-      setTimeout(() => metaEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
-    } catch { toast.error('Bot offline'); }
-    finally { setMetaLoading(false); }
+      setTrainHistory((h) => [...h, { role: 'assistant', content: data.reply, actionsCreated: data.actionsCreated, at: new Date().toISOString() }]);
+      if (data.actionsCreated?.length) {
+        // atualiza operatorNotes localmente se a IA mudou
+        const cr = await fetch('/api/whatsapp/settings');
+        if (cr.ok) { const crm = await cr.json(); if (crm.settings?.operatorNotes) setSettings((s) => ({ ...s, operatorNotes: crm.settings.operatorNotes })); }
+      }
+    } catch { toast.error('Erro na comunicação'); }
+    finally {
+      setTrainLoading(false);
+      setTimeout(() => trainEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    }
   };
 
-  const clearMetaChat = async () => {
-    if (!confirm('Limpar histórico do chat com o agente?')) return;
-    await fetch('/api/whatsapp/meta-chat', { method: 'DELETE' });
-    setMetaMessages([]);
+  const clearTrainHistory = async () => {
+    if (!confirm('Limpar histórico de treinamento?')) return;
+    await fetch('/api/whatsapp/train', { method: 'DELETE' });
+    setTrainHistory([]);
     toast.success('Histórico limpo');
   };
 
@@ -255,12 +293,13 @@ export default function WhatsAppPage() {
     if (!configOpen) return;
     loadSettings();
     loadQR();
+    loadTrainHistory();
     // Auto-refresh QR a cada 8s enquanto não conectado
     const iv = setInterval(() => {
       if (!qrData?.connected) loadQR();
     }, 8000);
     return () => clearInterval(iv);
-  }, [configOpen, loadSettings, loadQR, qrData?.connected]);
+  }, [configOpen, loadSettings, loadQR, loadTrainHistory, qrData?.connected]);
 
   // ── Auto-scroll ───────────────────────────────────────────────────────────
 
@@ -376,296 +415,344 @@ export default function WhatsAppPage() {
         </button>
       </div>
 
-      {/* ── Painel de configurações (overlay) ────────────────────────────── */}
+      {/* ── Painel de configurações (tela cheia) ─────────────────────────── */}
       {configOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="flex-1 bg-black/40" onClick={() => setConfigOpen(false)} />
-          <div className="w-full max-w-sm bg-white flex flex-col shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-white flex flex-col">
 
-            {/* Header */}
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 bg-gray-900 text-white shrink-0">
-              <Settings size={16} className="text-yellow-400" />
-              <span className="font-semibold text-sm flex-1">Configurações do Bot</span>
-              <button onClick={() => setConfigOpen(false)} className="p-1 hover:bg-gray-700 rounded">
-                <X size={18} />
-              </button>
-            </div>
+          {/* Header */}
+          <div className="flex items-center gap-3 px-6 py-3 border-b border-gray-200 bg-gray-900 text-white shrink-0">
+            <Settings size={16} className="text-yellow-400" />
+            <span className="font-semibold text-sm flex-1">Configurações do Bot — 4x4 Mundo Afora</span>
+            <button onClick={() => setConfigOpen(false)} className="p-1.5 hover:bg-gray-700 rounded">
+              <X size={18} />
+            </button>
+          </div>
 
-            {/* Tabs */}
-            <div className="flex border-b border-gray-200 shrink-0">
-              {([['rules', 'Regras & Config'], ['chat', 'Falar com o agente']] as const).map(([k, label]) => (
+          {/* Body: sidebar + content */}
+          <div className="flex flex-1 min-h-0">
+
+            {/* Sidebar nav */}
+            <nav className="w-52 border-r border-gray-100 bg-gray-50 flex flex-col py-4 gap-1 shrink-0">
+              {([
+                ['connection', '📶', 'Conexão WhatsApp'],
+                ['rules', '⚙️', 'Regras & Config'],
+                ['training', '🤖', 'Treinar o Bot'],
+              ] as const).map(([k, icon, label]) => (
                 <button
                   key={k}
                   onClick={() => setConfigTab(k)}
-                  className={`flex-1 py-2.5 text-xs font-medium transition-colors
+                  className={`flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-lg mx-2 text-left transition-colors
                     ${configTab === k
-                      ? 'text-yellow-600 border-b-2 border-yellow-400 bg-yellow-50'
-                      : 'text-gray-500 hover:text-gray-700'}`}
+                      ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                      : 'text-gray-600 hover:bg-gray-100'}`}
                 >
-                  {label}
+                  <span>{icon}</span> {label}
                 </button>
               ))}
-            </div>
+            </nav>
 
-            {/* ── Aba: Regras & Config ────────────────────────────────────── */}
-            {configTab === 'rules' && (
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Content */}
+            <div className="flex-1 flex flex-col min-h-0 min-w-0">
 
-                {/* WhatsApp connection */}
-                <div className="border border-gray-200 rounded-xl p-3 bg-gray-50">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">
-                      <QrCode size={13} /> Conexão WhatsApp
-                    </span>
-                    <button
-                      onClick={loadQR}
-                      className="text-[10px] text-gray-400 hover:text-gray-600 flex items-center gap-0.5"
-                    >
-                      <RefreshCw size={10} className={qrLoading ? 'animate-spin' : ''} /> Atualizar
-                    </button>
-                  </div>
-                  {qrLoading ? (
-                    <div className="flex justify-center py-3">
-                      <Loader2 size={22} className="animate-spin text-gray-400" />
+            {/* ── Aba: Conexão ───────────────────────────────────────────── */}
+            {configTab === 'connection' && (
+              <div className="flex-1 overflow-y-auto p-8">
+                <div className="max-w-md mx-auto space-y-6">
+                  <h2 className="text-lg font-semibold text-gray-800">Conexão WhatsApp</h2>
+                  <div className="border border-gray-200 rounded-xl p-6 bg-gray-50">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                        <QrCode size={16} /> Status da Conexão
+                      </span>
+                      <button onClick={loadQR} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
+                        <RefreshCw size={12} className={qrLoading ? 'animate-spin' : ''} /> Atualizar
+                      </button>
                     </div>
-                  ) : qrData?.connected ? (
-                    <div className="flex items-center gap-2 text-green-600 text-sm py-1">
-                      <Wifi size={15} />
-                      <span className="font-medium">WhatsApp conectado</span>
-                    </div>
-                  ) : qrData?.offline ? (
-                    <div className="flex items-center gap-2 text-red-500 text-sm py-1">
-                      <WifiOff size={15} />
-                      <span>Bot offline — inicie o servidor do bot</span>
-                    </div>
-                  ) : qrData?.qr ? (
-                    <div className="flex flex-col items-center gap-2">
-                      <img src={qrData.qr} alt="QR Code WhatsApp" className="w-48 h-48 rounded-lg border border-gray-200" />
-                      <p className="text-[11px] text-gray-500 text-center">
-                        Abra o WhatsApp → Menu → Dispositivos conectados → Conectar dispositivo
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-gray-400 text-sm py-1">
-                      <WifiOff size={15} />
-                      <span>Aguardando QR Code...</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Alerta sem resp. (min)</label>
-                    <input
-                      type="number" min={1}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-yellow-400"
-                      value={settings.alertMinutes}
-                      onChange={(e) => setSettings((s) => ({ ...s, alertMinutes: +e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Follow-up 1 após (h)</label>
-                    <input
-                      type="number" min={1}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-yellow-400"
-                      value={settings.followup1Hours}
-                      onChange={(e) => setSettings((s) => ({ ...s, followup1Hours: +e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Follow-up 2 após (h)</label>
-                    <input
-                      type="number" min={1}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-yellow-400"
-                      value={settings.followup2Hours}
-                      onChange={(e) => setSettings((s) => ({ ...s, followup2Hours: +e.target.value }))}
-                    />
+                    {qrLoading ? (
+                      <div className="flex justify-center py-6"><Loader2 size={28} className="animate-spin text-gray-400" /></div>
+                    ) : qrData?.connected ? (
+                      <div className="flex flex-col items-center gap-3 py-4">
+                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                          <Wifi size={28} className="text-green-600" />
+                        </div>
+                        <div className="text-center">
+                          <p className="font-semibold text-green-700">WhatsApp Conectado</p>
+                          <p className="text-xs text-gray-500 mt-1">Bot online e respondendo mensagens</p>
+                        </div>
+                      </div>
+                    ) : qrData?.offline ? (
+                      <div className="flex flex-col items-center gap-3 py-4">
+                        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+                          <WifiOff size={28} className="text-red-500" />
+                        </div>
+                        <p className="text-sm text-red-600 text-center">Bot offline — servidor não respondendo</p>
+                      </div>
+                    ) : qrData?.qr ? (
+                      <div className="flex flex-col items-center gap-3">
+                        <img src={qrData.qr} alt="QR Code" className="w-64 h-64 rounded-xl border border-gray-200 shadow-sm" />
+                        <p className="text-xs text-gray-500 text-center">
+                          Abra o WhatsApp → Menu → <strong>Dispositivos conectados</strong> → Conectar dispositivo
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-gray-400 text-sm py-4 justify-center">
+                        <WifiOff size={18} /> Aguardando QR Code...
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Mensagem follow-up 1
-                    <span className="ml-1 text-gray-400">(enviada após {settings.followup1Hours}h sem resposta)</span>
-                  </label>
-                  <textarea
-                    rows={2}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-yellow-400"
-                    value={settings.followupMessage1}
-                    onChange={(e) => setSettings((s) => ({ ...s, followupMessage1: e.target.value }))}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Mensagem follow-up 2
-                    <span className="ml-1 text-gray-400">(enviada após {settings.followup2Hours}h sem resposta)</span>
-                  </label>
-                  <textarea
-                    rows={2}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-yellow-400"
-                    value={settings.followupMessage2}
-                    onChange={(e) => setSettings((s) => ({ ...s, followupMessage2: e.target.value }))}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Telefone do Diego (para fornecedores)</label>
-                  <input
-                    type="text" placeholder="5511999999999"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-yellow-400"
-                    value={settings.diegoPhone}
-                    onChange={(e) => setSettings((s) => ({ ...s, diegoPhone: e.target.value }))}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Telefone da Michelle (notificações)</label>
-                  <input
-                    type="text" placeholder="5511999999999"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-yellow-400"
-                    value={settings.michellePhone}
-                    onChange={(e) => setSettings((s) => ({ ...s, michellePhone: e.target.value }))}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-gray-500 mb-2">
-                    Tempo de "digitando..." antes de responder
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min={0}
-                      max={10}
-                      step={1}
-                      value={settings.typingDelaySeconds}
-                      onChange={(e) => setSettings((s) => ({ ...s, typingDelaySeconds: Number(e.target.value) }))}
-                      className="flex-1 accent-yellow-400"
-                    />
-                    <span className="text-sm font-medium w-20 text-gray-700">
-                      {settings.typingDelaySeconds === 0 ? 'Desativado' : `${settings.typingDelaySeconds}s`}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-gray-400 mt-1">
-                    O bot mostrará o indicador "digitando..." por esse tempo antes de enviar a resposta.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Instruções ativas do operador
-                    <span className="ml-1 text-gray-400">(edite direto ou use o chat)</span>
-                  </label>
-                  <textarea
-                    rows={8}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-yellow-400 font-mono"
-                    placeholder={"• Serra Gaúcha tem 3 vagas restantes, criar urgência\n• Não oferecer desconto sem falar com Diego\n• ..."}
-                    value={settings.operatorNotes}
-                    onChange={(e) => setSettings((s) => ({ ...s, operatorNotes: e.target.value }))}
-                  />
-                  <p className="text-[10px] text-gray-400 mt-1">
-                    Estas instruções são injetadas no prompt do agente com prioridade máxima.
-                  </p>
-                </div>
-
-                <button
-                  onClick={saveSettings}
-                  disabled={savingSettings}
-                  className="w-full flex items-center justify-center gap-2 bg-yellow-400 hover:bg-yellow-500
-                    disabled:opacity-50 text-black font-semibold py-2.5 rounded-lg transition-colors"
-                >
-                  {savingSettings ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                  {savingSettings ? 'Salvando...' : 'Salvar configurações'}
-                </button>
               </div>
             )}
 
-            {/* ── Aba: Chat com o agente ──────────────────────────────────── */}
-            {configTab === 'chat' && (
+            {/* ── Aba: Regras & Config ────────────────────────────────────── */}
+            {configTab === 'rules' && (
+              <div className="flex-1 overflow-y-auto p-8">
+                <div className="max-w-2xl mx-auto space-y-6">
+                  <h2 className="text-lg font-semibold text-gray-800">Regras & Configurações</h2>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Alerta sem resp. (min)</label>
+                      <input type="number" min={1} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-yellow-400"
+                        value={settings.alertMinutes} onChange={(e) => setSettings((s) => ({ ...s, alertMinutes: +e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Follow-up 1 (h)</label>
+                      <input type="number" min={1} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-yellow-400"
+                        value={settings.followup1Hours} onChange={(e) => setSettings((s) => ({ ...s, followup1Hours: +e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Follow-up 2 (h)</label>
+                      <input type="number" min={1} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-yellow-400"
+                        value={settings.followup2Hours} onChange={(e) => setSettings((s) => ({ ...s, followup2Hours: +e.target.value }))} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Mensagem follow-up 1 <span className="text-gray-400">(após {settings.followup1Hours}h sem resposta)</span></label>
+                    <textarea rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-yellow-400"
+                      value={settings.followupMessage1} onChange={(e) => setSettings((s) => ({ ...s, followupMessage1: e.target.value }))} />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Mensagem follow-up 2 <span className="text-gray-400">(após {settings.followup2Hours}h sem resposta)</span></label>
+                    <textarea rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-yellow-400"
+                      value={settings.followupMessage2} onChange={(e) => setSettings((s) => ({ ...s, followupMessage2: e.target.value }))} />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Telefone do Diego</label>
+                      <input type="text" placeholder="5511999999999" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-yellow-400"
+                        value={settings.diegoPhone} onChange={(e) => setSettings((s) => ({ ...s, diegoPhone: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Telefone da Michelle</label>
+                      <input type="text" placeholder="5511999999999" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-yellow-400"
+                        value={settings.michellePhone} onChange={(e) => setSettings((s) => ({ ...s, michellePhone: e.target.value }))} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-2">Tempo de "digitando..." antes de responder</label>
+                    <div className="flex items-center gap-3">
+                      <input type="range" min={0} max={10} step={1} value={settings.typingDelaySeconds}
+                        onChange={(e) => setSettings((s) => ({ ...s, typingDelaySeconds: Number(e.target.value) }))}
+                        className="flex-1 accent-yellow-400" />
+                      <span className="text-sm font-medium w-20 text-gray-700">
+                        {settings.typingDelaySeconds === 0 ? 'Desativado' : `${settings.typingDelaySeconds}s`}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Instruções do operador <span className="text-gray-400">(geradas pelo Treinar o Bot)</span>
+                    </label>
+                    <textarea rows={10} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-yellow-400 font-mono"
+                      placeholder={"• Serra Gaúcha tem 3 vagas restantes\n• Não oferecer desconto sem falar com Diego\n• ..."}
+                      value={settings.operatorNotes} onChange={(e) => setSettings((s) => ({ ...s, operatorNotes: e.target.value }))} />
+                  </div>
+
+                  <button onClick={saveSettings} disabled={savingSettings}
+                    className="flex items-center justify-center gap-2 bg-yellow-400 hover:bg-yellow-500 disabled:opacity-50 text-black font-semibold py-2.5 px-6 rounded-lg transition-colors">
+                    {savingSettings ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                    {savingSettings ? 'Salvando...' : 'Salvar configurações'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Aba: Treinar o Bot ──────────────────────────────────────── */}
+            {configTab === 'training' && (
               <div className="flex flex-col flex-1 min-h-0">
+
+                {/* Hidden file input */}
+                <input ref={trainFileRef} type="file" accept="image/*,audio/*,video/*" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) { handleFileAttach(f); e.target.value = ''; } }} />
+
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50">
-                  {metaMessages.length === 0 && (
-                    <div className="text-center text-gray-400 text-xs mt-4 space-y-1">
-                      <Bot size={28} className="mx-auto opacity-30" />
-                      <p className="font-medium text-gray-500">Fale com o agente</p>
-                      <p>Dê instruções em linguagem natural.<br/>Ele confirma e aplica nas conversas com clientes.</p>
-                      <div className="mt-3 space-y-1 text-left">
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
+                  {trainHistory.length === 0 && (
+                    <div className="max-w-lg mx-auto mt-8 text-center space-y-4">
+                      <div className="w-16 h-16 bg-yellow-100 rounded-2xl flex items-center justify-center mx-auto">
+                        <Bot size={28} className="text-yellow-600" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-800 text-lg">Estúdio de Treinamento</p>
+                        <p className="text-sm text-gray-500 mt-1">
+                          Explique ao bot como você quer que ele atenda.<br/>
+                          Pode mandar fotos, áudios, vídeos e links junto com as instruções.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 gap-2 mt-4 text-left">
                         {[
-                          'Serra Gaúcha tem 3 vagas, cria urgência',
-                          'Não ofereça desconto, direcione pro Diego',
-                          'Essa semana promoção especial: 5% à vista',
-                          'Expedição Pantanal está suspensa',
-                        ].map((tip) => (
-                          <button
-                            key={tip}
-                            onClick={() => setMetaInput(tip)}
-                            className="block w-full text-left text-xs bg-white border border-gray-200 rounded-lg px-3 py-2 hover:bg-yellow-50 hover:border-yellow-300 transition-colors"
-                          >
-                            {tip}
+                          ['📷 + instrução', 'Quando alguém perguntar sobre Lençóis, manda essa foto [imagem] com a descrição da expedição'],
+                          ['🎤 + instrução', 'Manda esse áudio de boas-vindas para todos os novos leads [áudio]'],
+                          ['📝 regra', 'Não ofereça desconto. Se insistir, diga para falar com o Diego no 55...'],
+                          ['🔗 + contexto', 'Essa é nossa página de vendas [link]. Manda para quem quiser saber mais sobre preços'],
+                        ].map(([tag, ex]) => (
+                          <button key={tag} onClick={() => setTrainInput(ex)}
+                            className="flex items-start gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3 hover:border-yellow-300 hover:bg-yellow-50 transition-colors text-left">
+                            <span className="text-xs font-semibold text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded-full shrink-0 mt-0.5">{tag}</span>
+                            <span className="text-xs text-gray-600">{ex}</span>
                           </button>
                         ))}
                       </div>
                     </div>
                   )}
-                  {metaMessages.map((m, i) => (
-                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap
-                        ${m.role === 'user'
-                          ? 'bg-yellow-400 text-gray-900 rounded-tr-sm'
-                          : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm shadow-sm'
-                        }`}>
-                        {m.content}
+
+                  {trainHistory.map((msg, i) => (
+                    <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} gap-2`}>
+                      {msg.role === 'assistant' && (
+                        <div className="w-7 h-7 bg-yellow-100 rounded-full flex items-center justify-center shrink-0 mt-1">
+                          <Bot size={14} className="text-yellow-700" />
+                        </div>
+                      )}
+                      <div className={`max-w-[72%] space-y-2`}>
+                        {/* Attachments do usuário */}
+                        {msg.attachments && msg.attachments.length > 0 && (
+                          <div className="flex flex-wrap gap-2 justify-end">
+                            {msg.attachments.map((a, ai) => (
+                              <div key={ai} className="rounded-xl overflow-hidden border border-gray-200 bg-white shadow-sm">
+                                {a.type === 'image' ? (
+                                  <img src={a.url} alt={a.name} className="max-w-[200px] max-h-[150px] object-cover" />
+                                ) : a.type === 'audio' ? (
+                                  <div className="px-3 py-2 flex items-center gap-2 text-xs text-gray-600">
+                                    <span>🎤</span> <span className="truncate max-w-[120px]">{a.name}</span>
+                                  </div>
+                                ) : a.type === 'video' ? (
+                                  <div className="px-3 py-2 flex items-center gap-2 text-xs text-gray-600">
+                                    <span>🎬</span> <span className="truncate max-w-[120px]">{a.name}</span>
+                                  </div>
+                                ) : (
+                                  <div className="px-3 py-2 flex items-center gap-2 text-xs text-blue-600">
+                                    <Link size={12} /> <span className="truncate max-w-[160px]">{a.name}</span>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {/* Texto da mensagem */}
+                        {msg.content && (
+                          <div className={`px-4 py-2.5 rounded-2xl text-sm whitespace-pre-wrap
+                            ${msg.role === 'user'
+                              ? 'bg-yellow-400 text-gray-900 rounded-tr-sm'
+                              : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm shadow-sm'}`}>
+                            {msg.content}
+                          </div>
+                        )}
+                        {/* Ações criadas */}
+                        {msg.actionsCreated && msg.actionsCreated.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {msg.actionsCreated.map((a, ai) => (
+                              <span key={ai} className="text-[10px] bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">
+                                ✓ {a}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
-                  {metaLoading && (
-                    <div className="flex justify-start">
-                      <div className="bg-white border border-gray-200 px-3 py-2 rounded-2xl rounded-tl-sm shadow-sm flex items-center gap-2 text-sm text-gray-400">
-                        <Loader2 size={14} className="animate-spin" /> Processando...
+
+                  {trainLoading && (
+                    <div className="flex justify-start gap-2">
+                      <div className="w-7 h-7 bg-yellow-100 rounded-full flex items-center justify-center shrink-0">
+                        <Bot size={14} className="text-yellow-700" />
+                      </div>
+                      <div className="bg-white border border-gray-200 px-4 py-2.5 rounded-2xl rounded-tl-sm shadow-sm flex items-center gap-2 text-sm text-gray-400">
+                        <Loader2 size={14} className="animate-spin" /> Analisando e configurando...
                       </div>
                     </div>
                   )}
-                  <div ref={metaEndRef} />
+                  <div ref={trainEndRef} />
                 </div>
 
-                {/* Input */}
-                <div className="border-t border-gray-200 p-3 shrink-0 bg-white">
-                  <div className="flex items-end gap-2">
-                    <textarea
-                      rows={2}
-                      className="flex-1 resize-none border border-gray-300 rounded-xl px-3 py-2 text-sm
-                        focus:outline-none focus:border-yellow-400 placeholder:text-gray-400"
-                      placeholder="Ex: Serra Gaúcha tem 3 vagas, cria urgência..."
-                      value={metaInput}
-                      onChange={(e) => setMetaInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMetaChat(); }
+                {/* Composer */}
+                <div className="border-t border-gray-200 bg-white shrink-0">
+                  {/* Pending attachments */}
+                  {trainAttachments.length > 0 && (
+                    <div className="flex flex-wrap gap-2 px-4 pt-3">
+                      {trainAttachments.map((a, i) => (
+                        <div key={i} className="flex items-center gap-1.5 bg-gray-100 border border-gray-200 rounded-full pl-2 pr-1 py-1 text-xs">
+                          <span>{a.type === 'image' ? '📷' : a.type === 'audio' ? '🎤' : a.type === 'video' ? '🎬' : '🔗'}</span>
+                          <span className="truncate max-w-[120px] text-gray-700">{a.name}</span>
+                          <button onClick={() => setTrainAttachments((arr) => arr.filter((_, j) => j !== i))}
+                            className="text-gray-400 hover:text-red-500 ml-0.5">
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                      {uploadingFile && <span className="text-xs text-gray-400 flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> enviando...</span>}
+                    </div>
+                  )}
+
+                  <div className="flex items-end gap-2 p-3">
+                    {/* Attach buttons */}
+                    <div className="flex gap-1 shrink-0">
+                      <button title="Anexar foto/áudio/vídeo" onClick={() => trainFileRef.current?.click()} disabled={uploadingFile}
+                        className="p-2 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors disabled:opacity-40">
+                        <Upload size={18} />
+                      </button>
+                      <button title="Adicionar link" onClick={() => {
+                        const url = prompt('Cole o link:');
+                        if (url) addLinkAttachment(url);
                       }}
-                      disabled={metaLoading}
+                        className="p-2 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors">
+                        <Link size={18} />
+                      </button>
+                    </div>
+
+                    <textarea rows={2}
+                      className="flex-1 resize-none border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-yellow-400 placeholder:text-gray-400"
+                      placeholder="Explique ao bot como quer que ele atenda... Pode anexar fotos, áudios e links."
+                      value={trainInput}
+                      onChange={(e) => setTrainInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTraining(); } }}
+                      disabled={trainLoading}
                     />
-                    <button
-                      onClick={sendMetaChat}
-                      disabled={!metaInput.trim() || metaLoading}
-                      className="bg-yellow-400 hover:bg-yellow-500 disabled:opacity-40 text-black
-                        rounded-full w-9 h-9 flex items-center justify-center shrink-0 transition-colors"
-                    >
-                      <Send size={15} />
+                    <button onClick={sendTraining}
+                      disabled={(!trainInput.trim() && trainAttachments.length === 0) || trainLoading}
+                      className="bg-yellow-400 hover:bg-yellow-500 disabled:opacity-40 text-black rounded-full w-10 h-10 flex items-center justify-center shrink-0 transition-colors">
+                      <Send size={16} />
                     </button>
                   </div>
-                  {metaMessages.length > 0 && (
-                    <button
-                      onClick={clearMetaChat}
-                      className="mt-2 flex items-center gap-1 text-[10px] text-gray-400 hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 size={10} /> Limpar histórico
-                    </button>
+
+                  {trainHistory.length > 0 && (
+                    <div className="px-4 pb-2">
+                      <button onClick={clearTrainHistory} className="text-[10px] text-gray-400 hover:text-red-500 flex items-center gap-1">
+                        <Trash2 size={10} /> Limpar histórico de treinamento
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
             )}
-          </div>
+
+            </div>{/* /content */}
+          </div>{/* /body */}
         </div>
       )}
 
