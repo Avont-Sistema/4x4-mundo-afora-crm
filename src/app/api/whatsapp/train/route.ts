@@ -49,28 +49,32 @@ Analise o que o operador enviou e responda APENAS em JSON válido, sem markdown:
   "updatedNotes": "texto completo das instruções do operador (null se não mudar nada)",
   "createFlows": [
     {
-      "name": "Nome curto do fluxo",
+      "name": "Nome EXATO do fluxo (mesmo nome se for atualização)",
       "description": "descrição",
       "trigger": "new_lead | keyword | manual",
       "triggerData": {"keywords": "palavra1,palavra2"},
       "steps": [
-        {"order": 0, "type": "text | image | audio | delay", "content": "texto ou URL", "delayMin": 0}
+        {"order": 0, "type": "text | image | audio | video | delay", "content": "texto ou URL", "delayMin": 0}
       ]
     }
   ]
 }
 
-REGRAS:
+REGRAS CRÍTICAS:
+- Se o operador pedir para ADICIONAR algo a um fluxo existente → coloque o fluxo COMPLETO em createFlows com o nome EXATO, incluindo os steps já existentes + os novos. O sistema substitui o fluxo com o mesmo nome.
+- Se o operador pedir para REMOVER algo de um fluxo existente → coloque o fluxo COMPLETO sem o step removido.
 - Se o operador mostrou uma mídia (foto/audio/video) + disse "quando X, manda isso" → crie um fluxo com a URL da mídia
 - Se o operador deu regras gerais de atendimento → atualize updatedNotes
 - Se for misto → faça os dois
-- createFlows: array vazio [] se não precisar criar nenhum
+- createFlows: array vazio [] se não precisar criar ou atualizar nenhum
 - updatedNotes: null se não mudar as notas
-- Na reply seja específico: "Entendido! Criei o fluxo 'X' que dispara quando..." ou "Anotei que..."
+- Na reply seja específico: "Entendido! Adicionei o step de vídeo ao final do fluxo 'X' — agora ele tem Y etapas."
 - Para fluxos com keyword, coloque as palavras que ativam em triggerData.keywords
 - Para imagens: step type="image", content=URL
 - Para áudio: step type="audio", content=URL
-- Não invente URLs — use as URLs que o operador forneceu`;
+- Para vídeo: step type="video", content=URL
+- Não invente URLs — use as URLs que o operador forneceu
+- NUNCA retorne um fluxo com steps incompletos ou vazios`;
 }
 
 // ── GET: histórico ────────────────────────────────────────────────────────────
@@ -115,7 +119,14 @@ export async function POST(request: NextRequest) {
     resolve(),
   ]);
 
-  const existingFlows = flows.map((f) => `- "${f.name}" (${f.trigger})`).join('\n');
+  const existingFlows = flows.map((f) => {
+    const steps = (f.steps || []).map((s: any) =>
+      s.type === 'delay'
+        ? `[delay ${s.delayMin}min]`
+        : `[${s.type}: ${(s.content || '').slice(0, 80)}]`
+    ).join(' → ');
+    return `- "${f.name}" (trigger: ${f.trigger}, keywords: ${f.triggerData?.keywords || '-'})\n  Etapas: ${steps || '(vazio)'}`;
+  }).join('\n');
   const client = cfg.deepseekApiKey
     ? new OpenAI({ apiKey: cfg.deepseekApiKey, baseURL: 'https://api.deepseek.com' })
     : null;

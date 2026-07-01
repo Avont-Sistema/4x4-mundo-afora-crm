@@ -4,11 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Plus, Zap, Trash2, Play, ChevronDown, ChevronUp,
   MessageSquare, Clock, Image, Mic, ToggleLeft, ToggleRight, X, Save,
-  Upload, Link, Eye,
+  Upload, Link, Eye, Video,
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type StepType = 'text' | 'delay' | 'image' | 'audio';
+type StepType = 'text' | 'delay' | 'image' | 'audio' | 'video';
 type TriggerType = 'new_lead' | 'keyword' | 'manual';
 
 interface Step {
@@ -43,6 +43,7 @@ const STEP_ICONS: Record<StepType, React.ReactNode> = {
   delay: <Clock size={14} />,
   image: <Image size={14} />,
   audio: <Mic size={14} />,
+  video: <Video size={14} />,
 };
 
 const STEP_COLORS: Record<StepType, string> = {
@@ -50,6 +51,7 @@ const STEP_COLORS: Record<StepType, string> = {
   delay: 'bg-yellow-50 border-yellow-200',
   image: 'bg-green-50 border-green-200',
   audio: 'bg-purple-50 border-purple-200',
+  video: 'bg-red-50 border-red-200',
 };
 
 const EMPTY_FLOW = (): Omit<Flow, 'id' | 'createdAt' | '_count'> => ({
@@ -67,35 +69,54 @@ function FileOrUrlInput({
   value,
   onChange,
 }: {
-  type: 'image' | 'audio';
+  type: 'image' | 'audio' | 'video';
   value: string;
   onChange: (url: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
   const [error, setError] = useState('');
   const [mode, setMode] = useState<'upload' | 'url'>(value ? 'url' : 'upload');
 
-  const borderColor = type === 'image' ? 'border-green-200' : 'border-purple-200';
-  const ringColor = type === 'image' ? 'focus:ring-green-400' : 'focus:ring-purple-400';
-  const accept = type === 'image' ? 'image/jpeg,image/png,image/gif,image/webp' : 'audio/ogg,audio/mpeg,audio/mp4,audio/wav,audio/opus';
-  const label = type === 'image' ? 'imagem (JPG, PNG, GIF)' : 'áudio (.ogg, .mp3, .m4a)';
+  const borderColor = type === 'image' ? 'border-green-200' : type === 'audio' ? 'border-purple-200' : 'border-red-200';
+  const ringColor = type === 'image' ? 'focus:ring-green-400' : type === 'audio' ? 'focus:ring-purple-400' : 'focus:ring-red-400';
+  const accept = type === 'image'
+    ? 'image/jpeg,image/png,image/gif,image/webp'
+    : type === 'audio'
+    ? 'audio/ogg,audio/mpeg,audio/mp4,audio/wav,audio/opus'
+    : 'video/mp4,video/webm,video/ogg,video/quicktime';
+  const label = type === 'image' ? 'imagem (JPG, PNG, GIF)' : type === 'audio' ? 'áudio (.ogg, .mp3, .m4a)' : 'vídeo (.mp4, .webm)';
 
   async function handleFile(file: File) {
     setError('');
     setUploading(true);
+    setUploadProgress('');
     try {
-      const form = new FormData();
-      form.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Falha no upload');
-      onChange(data.url);
+      const isLarge = file.type.startsWith('video/') || file.size > 4 * 1024 * 1024;
+      let url = '';
+      if (isLarge) {
+        setUploadProgress('Enviando vídeo (pode demorar)...');
+        const { upload } = await import('@vercel/blob/client');
+        const filename = `flows/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const blob = await upload(filename, file, { access: 'public', handleUploadUrl: '/api/upload' });
+        url = blob.url;
+      } else {
+        setUploadProgress('Enviando...');
+        const form = new FormData();
+        form.append('file', file);
+        const res = await fetch('/api/upload', { method: 'POST', body: form });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Falha no upload');
+        url = data.url;
+      }
+      onChange(url);
       setMode('url');
     } catch (e: any) {
       setError(e.message);
     } finally {
       setUploading(false);
+      setUploadProgress('');
     }
   }
 
@@ -141,13 +162,15 @@ function FileOrUrlInput({
             }}
           />
           {uploading ? (
-            <p className="text-sm text-gray-500">Enviando...</p>
+            <p className="text-sm text-gray-500">{uploadProgress || 'Enviando...'}</p>
           ) : value ? (
             <div className="space-y-1">
               {type === 'image' ? (
                 <img src={value} alt="preview" className="max-h-24 mx-auto rounded object-cover" />
-              ) : (
+              ) : type === 'audio' ? (
                 <audio controls src={value} className="mx-auto w-full" />
+              ) : (
+                <video src={value} controls className="max-h-32 mx-auto rounded" />
               )}
               <p className="text-xs text-gray-400">Clique ou arraste para trocar</p>
             </div>
@@ -155,7 +178,7 @@ function FileOrUrlInput({
             <div className="text-gray-400">
               <Upload size={20} className="mx-auto mb-1" />
               <p className="text-sm">Clique ou arraste o arquivo de {label}</p>
-              <p className="text-xs mt-1">Máx 10 MB</p>
+              <p className="text-xs mt-1">{type === 'video' ? 'Máx 100 MB (upload direto)' : 'Máx 10 MB'}</p>
             </div>
           )}
         </div>
@@ -163,7 +186,7 @@ function FileOrUrlInput({
         <input
           type="url"
           className={`w-full text-sm border ${borderColor} rounded p-2 focus:outline-none focus:ring-1 ${ringColor} bg-white`}
-          placeholder={type === 'image' ? 'https://... (URL da imagem)' : 'https://... (URL do áudio .ogg)'}
+          placeholder={type === 'image' ? 'https://... (URL da imagem)' : type === 'audio' ? 'https://... (URL do áudio .ogg)' : 'https://... (URL do vídeo .mp4)'}
           value={value}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -322,6 +345,7 @@ function FlowEditor({
                       {step.type === 'delay' && 'Espera'}
                       {step.type === 'image' && 'Imagem'}
                       {step.type === 'audio' && 'Áudio (voz)'}
+                      {step.type === 'video' && 'Vídeo'}
                     </span>
                     <span className="ml-auto flex items-center gap-1">
                       <button
@@ -371,7 +395,7 @@ function FlowEditor({
                     </div>
                   )}
 
-                  {(step.type === 'image' || step.type === 'audio') && (
+                  {(step.type === 'image' || step.type === 'audio' || step.type === 'video') && (
                     <FileOrUrlInput
                       type={step.type}
                       value={step.content || ''}
@@ -423,6 +447,12 @@ function FlowEditor({
                 className="flex items-center gap-1 text-xs px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-full hover:bg-purple-100"
               >
                 <Mic size={12} /> Áudio (voz)
+              </button>
+              <button
+                onClick={() => addStep('video')}
+                className="flex items-center gap-1 text-xs px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-full hover:bg-red-100"
+              >
+                <Video size={12} /> Vídeo
               </button>
             </div>
 
@@ -749,7 +779,7 @@ function FlowCard({
                 {STEP_ICONS[step.type]}
                 {step.type === 'delay' ? `${step.delayMin}min` :
                  step.type === 'text' ? (step.content?.slice(0, 20) + (step.content && step.content.length > 20 ? '…' : '') || 'vazio') :
-                 step.type === 'image' ? 'Imagem' : 'Áudio'}
+                 step.type === 'image' ? 'Imagem' : step.type === 'video' ? 'Vídeo' : 'Áudio'}
               </span>
               {i < steps.length - 1 && <span className="text-gray-300">→</span>}
             </div>

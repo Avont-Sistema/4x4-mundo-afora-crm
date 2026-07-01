@@ -1,6 +1,6 @@
 import { kvLoad, kvSave } from './kvStore';
 
-export type StepType = 'text' | 'delay' | 'image' | 'audio';
+export type StepType = 'text' | 'delay' | 'image' | 'audio' | 'video';
 export type TriggerType = 'new_lead' | 'keyword' | 'manual';
 
 export interface FlowStep {

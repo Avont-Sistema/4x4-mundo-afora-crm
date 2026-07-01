@@ -59,6 +59,7 @@ export async function processInbound(
 
   // 2c. dispara fluxos de keyword se a mensagem contém uma palavra-chave
   // Cooldown: não re-dispara o mesmo fluxo para o mesmo número nos últimos 60 min
+  let keywordFlowTriggered = false;
   const keywordFlows = await getFlowsForTrigger('keyword');
   for (const flow of keywordFlows) {
     const keywords = (flow.triggerData?.keywords ?? '')
@@ -73,12 +74,18 @@ export async function processInbound(
           nome: contactName || phone,
           telefone: phone,
         });
+        keywordFlowTriggered = true;
       }
     }
   }
 
   // 3. bot pausado ou conversa em modo humano/resolvido => não responde
   const ai = await aiEnabled();
+
+  // Se um fluxo de keyword foi disparado, não roda a IA por cima
+  if (keywordFlowTriggered) {
+    return { reply: null, mode: conv.mode, leadCreated, aiEnabled: ai, typingDelay: 0, reason: 'keyword_flow' };
+  }
 
   const typingDelay = settings.typingDelaySeconds ?? 2;
 

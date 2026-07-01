@@ -167,3 +167,35 @@ model FlowMessage {
   error       String?
   createdAt   DateTime  @default(now())
 }
+
+// ── Disparos em Massa ──────────────────────────────────────────────────────────
+
+model Broadcast {
+  id              String               @id @default(cuid())
+  name            String
+  message         String               // Template: {nome}, {telefone}
+  mediaUrl        String?
+  mediaType       String?              // "image" | "audio" | "video"
+  status          String               @default("draft") // "draft" | "running" | "paused" | "completed" | "cancelled"
+  recipientSource String               @default("custom") // "all_leads" | "all_clients" | "custom"
+  intervalSec     Int                  @default(10)
+  scheduledAt     DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  recipients      BroadcastRecipient[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+}
+
+model BroadcastRecipient {
+  id          String    @id @default(cuid())
+  broadcast   Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  broadcastId String
+  phone       String
+  name        String?
+  status      String    @default("pending") // "pending" | "sent" | "failed" | "skipped"
+  scheduledAt DateTime
+  sentAt      DateTime?
+  error       String?
+  createdAt   DateTime  @default(now())
+}

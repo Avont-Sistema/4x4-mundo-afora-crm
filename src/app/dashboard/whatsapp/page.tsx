@@ -6,6 +6,7 @@ import {
   AlertTriangle, RefreshCw, QrCode, Phone,
   Settings, X, Save, Trash2, Loader2, Upload, Link,
 } from 'lucide-react';
+import FlowsPage from '@/app/dashboard/flows/page';
 import toast from 'react-hot-toast';
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -102,7 +103,7 @@ export default function WhatsAppPage() {
 
   // ── Config panel ──────────────────────────────────────────────────────────
   const [configOpen, setConfigOpen]         = useState(false);
-  const [configTab, setConfigTab]           = useState<'connection' | 'rules' | 'training'>('training');
+  const [configTab, setConfigTab]           = useState<'connection' | 'rules' | 'training' | 'flows'>('training');
   const [settings, setSettings]             = useState<BotSettings>(DEFAULT_SETTINGS);
   const [savingSettings, setSavingSettings] = useState(false);
   const [qrData, setQrData]                 = useState<{ connected: boolean; qr: string | null; offline?: boolean } | null>(null);
@@ -451,6 +452,7 @@ export default function WhatsAppPage() {
                 ['connection', '📶', 'Conexão WhatsApp'],
                 ['rules', '⚙️', 'Regras & Config'],
                 ['training', '🤖', 'Treinar o Bot'],
+                ['flows', '🔀', 'Fluxos de Mensagens'],
               ] as const).map(([k, icon, label]) => (
                 <button
                   key={k}
@@ -762,6 +764,13 @@ export default function WhatsAppPage() {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* ── Aba: Fluxos de Mensagens ────────────────────────────────── */}
+            {configTab === 'flows' && (
+              <div className="flex-1 overflow-y-auto">
+                <FlowsPage />
               </div>
             )}
 

@@ -147,7 +147,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: 'escalar_humano',
       description:
-        'Transfere a conversa para um atendente humano. Use em reclamações, casos delicados ou quando não souber responder.',
+        'Transfere a conversa para um atendente humano. Use APENAS em reclamações graves ou quando absolutamente não souber responder E as instruções do operador não cobrirem o caso. Se as instruções do operador já dizem o que fazer (ex: dar um número de telefone, explicar uma regra), siga as instruções e NÃO use esta ferramenta.',
       parameters: {
         type: 'object',
         properties: { motivo: { type: 'string' } },
