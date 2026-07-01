@@ -2,7 +2,7 @@ import { appendMessage, toClaudeHistory } from '@/lib/conversationsStore';
 import { getSettings, isWithinBusinessHours } from '@/lib/settingsStore';
 import { findLeadByPhone, upsertLeadFromContact } from '@/lib/leadsStore';
 import { runAgent, aiEnabled } from './brain';
-import { getFlowsForTrigger, triggerFlow } from '@/lib/flowsStore';
+import { getFlowsForTrigger, triggerFlow, wasFlowRecentlyTriggered } from '@/lib/flowsStore';
 
 export interface InboundResult {
   reply: string | null; // null = não responder automaticamente
@@ -58,6 +58,7 @@ export async function processInbound(
   }
 
   // 2c. dispara fluxos de keyword se a mensagem contém uma palavra-chave
+  // Cooldown: não re-dispara o mesmo fluxo para o mesmo número nos últimos 60 min
   const keywordFlows = await getFlowsForTrigger('keyword');
   for (const flow of keywordFlows) {
     const keywords = (flow.triggerData?.keywords ?? '')
@@ -66,10 +67,13 @@ export async function processInbound(
       .filter(Boolean);
     const msgLower = text.toLowerCase();
     if (keywords.some((kw) => msgLower.includes(kw))) {
-      await triggerFlow(flow.id, phone, {
-        nome: contactName || phone,
-        telefone: phone,
-      });
+      const recentlyTriggered = await wasFlowRecentlyTriggered(flow.id, phone, 60);
+      if (!recentlyTriggered) {
+        await triggerFlow(flow.id, phone, {
+          nome: contactName || phone,
+          telefone: phone,
+        });
+      }
     }
   }
 

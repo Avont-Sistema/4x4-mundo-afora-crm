@@ -255,3 +255,16 @@ export async function getFlowsForTrigger(trigger: TriggerType): Promise<Flow[]> 
   const flows = await loadFlowsRaw();
   return flows.filter((f) => f.trigger === trigger && f.active);
 }
+
+// Retorna true se o fluxo foi disparado para este telefone nos últimos X minutos
+export async function wasFlowRecentlyTriggered(
+  flowId: string,
+  phone: string,
+  withinMinutes = 60
+): Promise<boolean> {
+  const runs = await loadRuns();
+  const cutoff = new Date(Date.now() - withinMinutes * 60 * 1000).toISOString();
+  return runs.some(
+    (r) => r.flowId === flowId && r.phone === phone && r.startedAt >= cutoff
+  );
+}
