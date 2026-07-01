@@ -57,6 +57,22 @@ export async function processInbound(
     }
   }
 
+  // 2c. dispara fluxos de keyword se a mensagem contém uma palavra-chave
+  const keywordFlows = await getFlowsForTrigger('keyword');
+  for (const flow of keywordFlows) {
+    const keywords = (flow.triggerData?.keywords ?? '')
+      .split(',')
+      .map((k) => k.trim().toLowerCase())
+      .filter(Boolean);
+    const msgLower = text.toLowerCase();
+    if (keywords.some((kw) => msgLower.includes(kw))) {
+      await triggerFlow(flow.id, phone, {
+        nome: contactName || phone,
+        telefone: phone,
+      });
+    }
+  }
+
   // 3. bot pausado ou conversa em modo humano/resolvido => não responde
   const ai = await aiEnabled();
 
