@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
   }
 
   const filename = `flows/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-  const blob = await put(filename, file, { access: 'public' });
+  const blob = await put(filename, file, { access: 'private' });
 
   return NextResponse.json({ url: blob.url });
 }
