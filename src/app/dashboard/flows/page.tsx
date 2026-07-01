@@ -474,19 +474,27 @@ function TriggerModal({
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
+  // Normaliza para JID do WhatsApp: remove não-numéricos e adiciona sufixo
+  function toJid(raw: string): string {
+    const digits = raw.replace(/\D/g, '');
+    if (!digits) return raw;
+    return digits.includes('@') ? raw.trim() : `${digits}@s.whatsapp.net`;
+  }
+
   async function handleTrigger() {
     if (!phone.trim()) return alert('Telefone obrigatório');
+    const jid = toJid(phone);
     setRunning(true);
     setResult(null);
     try {
       const res = await fetch(`/api/flows/${flow.id}/trigger`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phone.trim(), vars: { nome: nome.trim() || phone.trim() } }),
+        body: JSON.stringify({ phone: jid, vars: { nome: nome.trim() || phone.trim(), telefone: jid } }),
       });
       const data = await res.json();
       if (res.ok) {
-        setResult(`✓ Fluxo iniciado! Run ID: ${data.run?.id}`);
+        setResult(`✓ Disparado para ${jid} — aguarde até 30s para receber.`);
       } else {
         setResult(`Erro: ${data.error}`);
       }
@@ -504,9 +512,18 @@ function TriggerModal({
           <h3 className="font-semibold text-gray-800">Disparar: {flow.name}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
         </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-700">
+          Este disparo <strong>ignora o cooldown</strong> — ideal para testes repetidos.
+        </div>
         <div>
-          <label className="text-sm font-medium text-gray-700 block mb-1">Telefone (ex: 5555996567019)</label>
-          <input className="input w-full" placeholder="55DDD9XXXXXXXX" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <label className="text-sm font-medium text-gray-700 block mb-1">Telefone</label>
+          <input
+            className="input w-full"
+            placeholder="55DDD9XXXXXXXX"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+          <p className="text-xs text-gray-400 mt-1">Ex: 5551999887766 (sem espaços ou traços)</p>
         </div>
         <div>
           <label className="text-sm font-medium text-gray-700 block mb-1">Nome (opcional)</label>
