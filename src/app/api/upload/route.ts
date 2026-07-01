@@ -26,9 +26,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Tipo não suportado: ${file.type}` }, { status: 400 });
   }
 
-  // Limite de 10 MB
-  if (file.size > 10 * 1024 * 1024) {
-    return NextResponse.json({ error: 'Arquivo maior que 10 MB' }, { status: 400 });
+  // Limite de 50 MB
+  if (file.size > 50 * 1024 * 1024) {
+    return NextResponse.json({ error: 'Arquivo maior que 50 MB' }, { status: 400 });
   }
 
   const filename = `flows/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
