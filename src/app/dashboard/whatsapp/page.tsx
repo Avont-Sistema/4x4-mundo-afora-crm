@@ -42,6 +42,7 @@ interface BotSettings {
   diegoPhone: string;
   michellePhone: string;
   operatorNotes: string;
+  typingDelaySeconds: number; // segundos de "digitando..." antes de responder
 }
 
 const DEFAULT_SETTINGS: BotSettings = {
@@ -53,6 +54,7 @@ const DEFAULT_SETTINGS: BotSettings = {
   diegoPhone: '',
   michellePhone: '',
   operatorNotes: '',
+  typingDelaySeconds: 2,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -114,9 +116,10 @@ export default function WhatsAppPage() {
 
   const loadSettings = useCallback(async () => {
     try {
-      const [sr, mr] = await Promise.all([
+      const [sr, mr, crmr] = await Promise.all([
         fetch('/api/whatsapp/bot-settings'),
         fetch('/api/whatsapp/meta-chat'),
+        fetch('/api/whatsapp/settings'),
       ]);
       if (sr.ok) setSettings(await sr.json());
       if (mr.ok) {
@@ -124,6 +127,12 @@ export default function WhatsAppPage() {
         setMetaMessages(md.history || []);
         if (md.operatorNotes !== undefined) {
           setSettings((s) => ({ ...s, operatorNotes: md.operatorNotes }));
+        }
+      }
+      if (crmr.ok) {
+        const crm = await crmr.json();
+        if (crm.settings?.typingDelaySeconds !== undefined) {
+          setSettings((s) => ({ ...s, typingDelaySeconds: crm.settings.typingDelaySeconds }));
         }
       }
     } catch { /* bot offline */ }
@@ -144,13 +153,20 @@ export default function WhatsAppPage() {
   const saveSettings = async () => {
     setSavingSettings(true);
     try {
-      await fetch('/api/whatsapp/bot-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
-      });
+      await Promise.all([
+        fetch('/api/whatsapp/bot-settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(settings),
+        }),
+        fetch('/api/whatsapp/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ typingDelaySeconds: settings.typingDelaySeconds }),
+        }),
+      ]);
       toast.success('Configurações salvas!');
-    } catch { toast.error('Bot offline'); }
+    } catch { toast.error('Erro ao salvar'); }
     finally { setSavingSettings(false); }
   };
 
@@ -511,6 +527,29 @@ export default function WhatsAppPage() {
                     value={settings.michellePhone}
                     onChange={(e) => setSettings((s) => ({ ...s, michellePhone: e.target.value }))}
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-gray-500 mb-2">
+                    Tempo de "digitando..." antes de responder
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={0}
+                      max={10}
+                      step={1}
+                      value={settings.typingDelaySeconds}
+                      onChange={(e) => setSettings((s) => ({ ...s, typingDelaySeconds: Number(e.target.value) }))}
+                      className="flex-1 accent-yellow-400"
+                    />
+                    <span className="text-sm font-medium w-20 text-gray-700">
+                      {settings.typingDelaySeconds === 0 ? 'Desativado' : `${settings.typingDelaySeconds}s`}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    O bot mostrará o indicador "digitando..." por esse tempo antes de enviar a resposta.
+                  </p>
                 </div>
 
                 <div>

@@ -15,6 +15,7 @@ export interface Settings {
   businessHoursEnabled: boolean;
   businessHours: BusinessHour[];
   outOfHoursMessage: string;
+  typingDelaySeconds: number; // segundos de "digitando..." antes de responder (0 = desativado)
 }
 
 const KV_KEY = 'settings';
@@ -23,6 +24,7 @@ const DEFAULTS: Settings = {
   botPaused: false,
   operatorNotes: '',
   businessHoursEnabled: false,
+  typingDelaySeconds: 2,
   businessHours: [
     { day: 1, open: '08:00', close: '18:00', enabled: true },
     { day: 2, open: '08:00', close: '18:00', enabled: true },

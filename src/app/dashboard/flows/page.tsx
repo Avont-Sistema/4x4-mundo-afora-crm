@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Plus, Zap, Trash2, Play, ChevronDown, ChevronUp,
   MessageSquare, Clock, Image, Mic, ToggleLeft, ToggleRight, X, Save,
+  Upload, Link,
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -58,6 +59,119 @@ const EMPTY_FLOW = (): Omit<Flow, 'id' | 'createdAt' | '_count'> => ({
   active: true,
   steps: [],
 });
+
+// ── File or URL input ─────────────────────────────────────────────────────────
+function FileOrUrlInput({
+  type,
+  value,
+  onChange,
+}: {
+  type: 'image' | 'audio';
+  value: string;
+  onChange: (url: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const [mode, setMode] = useState<'upload' | 'url'>(value ? 'url' : 'upload');
+
+  const borderColor = type === 'image' ? 'border-green-200' : 'border-purple-200';
+  const ringColor = type === 'image' ? 'focus:ring-green-400' : 'focus:ring-purple-400';
+  const accept = type === 'image' ? 'image/jpeg,image/png,image/gif,image/webp' : 'audio/ogg,audio/mpeg,audio/mp4,audio/wav,audio/opus';
+  const label = type === 'image' ? 'imagem (JPG, PNG, GIF)' : 'áudio (.ogg, .mp3, .m4a)';
+
+  async function handleFile(file: File) {
+    setError('');
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Falha no upload');
+      onChange(data.url);
+      setMode('url');
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      {/* Mode toggle */}
+      <div className="flex gap-2 text-xs">
+        <button
+          type="button"
+          onClick={() => setMode('upload')}
+          className={`flex items-center gap-1 px-2 py-1 rounded ${mode === 'upload' ? 'bg-gray-200 font-medium' : 'text-gray-400 hover:text-gray-600'}`}
+        >
+          <Upload size={11} /> Upload
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('url')}
+          className={`flex items-center gap-1 px-2 py-1 rounded ${mode === 'url' ? 'bg-gray-200 font-medium' : 'text-gray-400 hover:text-gray-600'}`}
+        >
+          <Link size={11} /> URL
+        </button>
+      </div>
+
+      {mode === 'upload' ? (
+        <div
+          className={`border-2 border-dashed ${borderColor} rounded-lg p-4 text-center cursor-pointer hover:bg-white/60 transition`}
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            const file = e.dataTransfer.files[0];
+            if (file) handleFile(file);
+          }}
+        >
+          <input
+            ref={inputRef}
+            type="file"
+            accept={accept}
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFile(file);
+            }}
+          />
+          {uploading ? (
+            <p className="text-sm text-gray-500">Enviando...</p>
+          ) : value ? (
+            <div className="space-y-1">
+              {type === 'image' ? (
+                <img src={value} alt="preview" className="max-h-24 mx-auto rounded object-cover" />
+              ) : (
+                <audio controls src={value} className="mx-auto w-full" />
+              )}
+              <p className="text-xs text-gray-400">Clique ou arraste para trocar</p>
+            </div>
+          ) : (
+            <div className="text-gray-400">
+              <Upload size={20} className="mx-auto mb-1" />
+              <p className="text-sm">Clique ou arraste o arquivo de {label}</p>
+              <p className="text-xs mt-1">Máx 10 MB</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <input
+          type="url"
+          className={`w-full text-sm border ${borderColor} rounded p-2 focus:outline-none focus:ring-1 ${ringColor} bg-white`}
+          placeholder={type === 'image' ? 'https://... (URL da imagem)' : 'https://... (URL do áudio .ogg)'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+
+      {error && <p className="text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
 
 // ── Editor modal ──────────────────────────────────────────────────────────────
 function FlowEditor({
@@ -257,20 +371,10 @@ function FlowEditor({
                   )}
 
                   {(step.type === 'image' || step.type === 'audio') && (
-                    <input
-                      type="url"
-                      className={`w-full text-sm border rounded p-2 focus:outline-none bg-white ${
-                        step.type === 'image'
-                          ? 'border-green-200 focus:ring-1 focus:ring-green-400'
-                          : 'border-purple-200 focus:ring-1 focus:ring-purple-400'
-                      }`}
-                      placeholder={
-                        step.type === 'image'
-                          ? 'URL da imagem (https://...)'
-                          : 'URL do arquivo de áudio .ogg (https://...)'
-                      }
+                    <FileOrUrlInput
+                      type={step.type}
                       value={step.content || ''}
-                      onChange={(e) => updateStep(idx, { content: e.target.value })}
+                      onChange={(url) => updateStep(idx, { content: url })}
                     />
                   )}
                 </div>

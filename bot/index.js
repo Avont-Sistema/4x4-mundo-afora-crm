@@ -252,6 +252,18 @@ async function connectWhatsApp() {
               ? [phone, resolveSendJid(phone)]            // LID primeiro, phone como fallback
               : [resolveSendJid(phone)];                  // phone normal
 
+            const sendJidResolved = jidsToTry[0];
+
+            // Mostra indicador "digitando..." pelo tempo configurado
+            const typingMs = (data.typingDelay || 0) * 1000;
+            if (typingMs > 0) {
+              try {
+                await sock.sendPresenceUpdate('composing', sendJidResolved);
+                await new Promise(r => setTimeout(r, typingMs));
+                await sock.sendPresenceUpdate('paused', sendJidResolved);
+              } catch { /* não crítico */ }
+            }
+
             for (const jid of jidsToTry) {
               console.log(`[bot] Tentando enviar → ${jid}`);
               try {
