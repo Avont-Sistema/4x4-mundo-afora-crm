@@ -17,7 +17,11 @@ export async function POST(request: NextRequest) {
   }
 
   // Valida tipo (imagens e áudio apenas)
-  const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/opus', 'audio/wav'];
+  const allowed = [
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+    'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/opus', 'audio/wav',
+    'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime', 'video/x-msvideo',
+  ];
   if (!allowed.includes(file.type)) {
     return NextResponse.json({ error: `Tipo não suportado: ${file.type}` }, { status: 400 });
   }
