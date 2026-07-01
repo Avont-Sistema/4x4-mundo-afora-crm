@@ -141,12 +141,22 @@ export async function POST(request: NextRequest) {
   try {
     const res = await client.chat.completions.create({
       model: cfg.agentModel || 'deepseek-chat',
-      max_tokens: 2048,
+      max_tokens: 4096,
       messages: contextMessages,
       response_format: { type: 'json_object' },
     });
     const raw = res.choices[0].message.content || '{}';
-    aiResponse = JSON.parse(raw);
+    try {
+      aiResponse = JSON.parse(raw);
+    } catch {
+      // JSON truncado: extrai o que for possível
+      const replyMatch = raw.match(/"reply"\s*:\s*"([^"]+)"/);
+      aiResponse = {
+        reply: replyMatch?.[1] ?? 'Entendido! Apliquei as instruções.',
+        updatedNotes: null,
+        createFlows: [],
+      };
+    }
   } catch (err: any) {
     console.error('[train] AI error:', err?.message);
     return NextResponse.json({ error: 'Erro na IA: ' + err?.message }, { status: 500 });

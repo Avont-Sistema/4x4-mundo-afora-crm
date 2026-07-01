@@ -1,6 +1,5 @@
 'use client';
 
-import { upload } from '@vercel/blob/client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ArrowLeft, Send, Bot, PauseCircle, Wifi, WifiOff,
@@ -181,28 +180,16 @@ export default function WhatsAppPage() {
   }, []);
 
   const handleFileAttach = async (file: File) => {
+    if (file.size > 50 * 1024 * 1024) { toast.error('Arquivo maior que 50 MB'); return; }
     setUploadingFile(true);
     const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'audio' : 'video';
-    const BASE = 'https://4x4-mundo-afora-crm-iota.vercel.app';
     try {
-      let url: string;
-      if (file.size > 4 * 1024 * 1024) {
-        // Arquivo grande: upload direto do browser para o Blob (sem passar pelo serverless)
-        const blob = await upload(file.name, file, {
-          access: 'private',
-          handleUploadUrl: '/api/upload',
-        });
-        url = `${BASE}/api/blob?src=${encodeURIComponent(blob.url)}`;
-      } else {
-        // Arquivo pequeno: upload via servidor
-        const form = new FormData();
-        form.append('file', file);
-        const res = await fetch('/api/upload', { method: 'POST', body: form });
-        const data = await res.json();
-        if (!res.ok) { toast.error(data.error || 'Erro no upload'); return; }
-        url = data.url;
-      }
-      setTrainAttachments((a) => [...a, { type, url, name: file.name }]);
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Erro no upload'); return; }
+      setTrainAttachments((a) => [...a, { type, url: data.url, name: file.name }]);
     } catch (e: any) { toast.error(e?.message || 'Falha no upload'); }
     finally { setUploadingFile(false); }
   };
