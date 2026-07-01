@@ -9,6 +9,7 @@ export interface FlowStep {
   type: StepType;
   content?: string;
   delayMin?: number;
+  typingDelaySec?: number; // segundos de "digitando..." antes de enviar esta mensagem
 }
 
 export interface Flow {
@@ -38,6 +39,7 @@ export interface FlowMessage {
   stepOrder: number;
   type: string;
   content?: string;
+  typingDelaySec?: number;
   scheduledAt: string;
   sentAt?: string;
   status: 'pending' | 'sent' | 'failed' | 'cancelled';
@@ -179,6 +181,7 @@ export async function triggerFlow(
       stepOrder: step.order,
       type: step.type,
       content: step.content ? interpolate(step.content, vars) : undefined,
+      typingDelaySec: step.typingDelaySec ?? 0,
       scheduledAt,
       status: 'pending',
       createdAt: now.toISOString(),

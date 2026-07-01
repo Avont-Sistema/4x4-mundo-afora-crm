@@ -541,6 +541,16 @@ async function pollFlowMessages() {
     let errorMsg = null;
 
     try {
+      // Mostra "digitando..." pelo tempo configurado na etapa
+      const typingSec = msg.typingDelaySec || 0;
+      if (typingSec > 0) {
+        try {
+          await sock.sendPresenceUpdate('composing', sendJid);
+          await new Promise(r => setTimeout(r, typingSec * 1000));
+          await sock.sendPresenceUpdate('paused', sendJid);
+        } catch { /* não crítico */ }
+      }
+
       if (msg.type === 'text') {
         await sock.sendMessage(sendJid, { text: msg.content || '' });
       } else if (msg.type === 'image') {
@@ -550,11 +560,39 @@ async function pollFlowMessages() {
           caption: '',
         });
       } else if (msg.type === 'audio') {
-        // content é URL do áudio; ptt=true envia como nota de voz
+        // PTT exige 'audio/ogg; codecs=opus' — preserva o codec completo para OGG
+        let detectedMime = 'audio/ogg; codecs=opus';
+        try {
+          const head = await fetch(msg.content, { method: 'HEAD' });
+          const ct = (head.headers.get('content-type') || '').toLowerCase();
+          if (ct.includes('ogg')) {
+            detectedMime = 'audio/ogg; codecs=opus';
+          } else if (ct.includes('mpeg') || ct.includes('mp3')) {
+            detectedMime = 'audio/mpeg';
+          } else if (ct && ct.includes('/')) {
+            detectedMime = ct.split(';')[0].trim();
+          }
+        } catch { /* usa default */ }
+        console.log(`[flow] audio mime: ${detectedMime} url: ${msg.content}`);
+        try {
+          // Tenta como PTT (nota de voz)
+          await sock.sendMessage(sendJid, {
+            audio: { url: msg.content },
+            mimetype: detectedMime,
+            ptt: true,
+          });
+        } catch (e1) {
+          console.warn(`[flow] PTT falhou (${e1.message}), tentando audio normal`);
+          // Fallback: envia como áudio normal (não PTT)
+          await sock.sendMessage(sendJid, {
+            audio: { url: msg.content },
+            mimetype: detectedMime,
+          });
+        }
+      } else if (msg.type === 'video') {
         await sock.sendMessage(sendJid, {
-          audio: { url: msg.content },
-          mimetype: 'audio/ogg; codecs=opus',
-          ptt: true,
+          video: { url: msg.content },
+          caption: '',
         });
       }
       console.log(`[flow] ✓ msg ${msg.id} enviada → ${sendJid}`);

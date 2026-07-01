@@ -16,6 +16,7 @@ interface Step {
   type: StepType;
   content?: string;
   delayMin?: number;
+  typingDelaySec?: number;
 }
 
 interface Flow {
@@ -376,6 +377,22 @@ function FlowEditor({
                       value={step.content || ''}
                       onChange={(url) => updateStep(idx, { content: url })}
                     />
+                  )}
+
+                  {step.type !== 'delay' && (
+                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/60">
+                      <Clock size={11} className="text-gray-400 shrink-0" />
+                      <span className="text-xs text-gray-400">Esperar</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={30}
+                        className="w-14 text-xs border border-gray-200 rounded px-2 py-0.5 text-center bg-white focus:outline-none focus:ring-1 focus:ring-gray-300"
+                        value={step.typingDelaySec ?? 0}
+                        onChange={(e) => updateStep(idx, { typingDelaySec: Math.max(0, Number(e.target.value)) })}
+                      />
+                      <span className="text-xs text-gray-400">seg antes de enviar esta mensagem</span>
+                    </div>
                   )}
                 </div>
               ))}
