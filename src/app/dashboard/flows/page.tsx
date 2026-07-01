@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Plus, Zap, Trash2, Play, ChevronDown, ChevronUp,
   MessageSquare, Clock, Image, Mic, ToggleLeft, ToggleRight, X, Save,
-  Upload, Link,
+  Upload, Link, Eye,
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -509,6 +509,132 @@ function TriggerModal({
   );
 }
 
+// ── Simulate modal ────────────────────────────────────────────────────────────
+function SimulateModal({ flow, onClose }: { flow: Flow; onClose: () => void }) {
+  const nonDelaySteps = flow.steps.filter((s) => s.type !== 'delay');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden" style={{ height: '85vh' }}>
+        {/* WhatsApp header */}
+        <div className="bg-[#075E54] text-white px-4 py-3 flex items-center gap-3 shrink-0">
+          <button onClick={onClose} className="text-white/80 hover:text-white mr-1">
+            <X size={18} />
+          </button>
+          <div className="w-8 h-8 rounded-full bg-[#25D366] flex items-center justify-center text-xs font-bold shrink-0">
+            4x4
+          </div>
+          <div className="min-w-0">
+            <p className="font-medium text-sm leading-tight truncate">4x4 Mundo Afora Bot</p>
+            <p className="text-xs text-white/70">Simulação — nenhuma mensagem enviada</p>
+          </div>
+        </div>
+
+        {/* Chat area */}
+        <div
+          className="flex-1 overflow-y-auto p-3 space-y-1"
+          style={{ background: '#ECE5DD url("data:image/svg+xml,%3Csvg width=\'40\' height=\'40\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3C/svg%3E")' }}
+        >
+          {/* Trigger info */}
+          <div className="flex justify-center mb-2">
+            <span className="text-xs bg-white/80 text-gray-600 px-3 py-1 rounded-full shadow-sm">
+              {flow.trigger === 'new_lead' && '👤 Fluxo inicia quando novo lead entra'}
+              {flow.trigger === 'keyword' && `🔑 Dispara quando cliente menciona: ${flow.triggerData?.keywords || '(sem palavras)'}`}
+              {flow.trigger === 'manual' && '▶ Fluxo disparado manualmente'}
+            </span>
+          </div>
+
+          {flow.steps.length === 0 && (
+            <div className="text-center text-gray-400 text-sm mt-8">Nenhuma etapa neste fluxo</div>
+          )}
+
+          {flow.steps.map((step, i) => {
+            if (step.type === 'delay') {
+              return (
+                <div key={i} className="flex justify-center my-2">
+                  <span className="text-xs bg-white/70 text-gray-500 px-3 py-1 rounded-full shadow-sm flex items-center gap-1">
+                    <Clock size={11} />
+                    {(step.delayMin ?? 0) >= 60
+                      ? `${((step.delayMin ?? 0) / 60).toFixed(1)}h depois`
+                      : `${step.delayMin} min depois`}
+                  </span>
+                </div>
+              );
+            }
+
+            return (
+              <div key={i} className="flex justify-start">
+                <div
+                  className="max-w-[85%] bg-white rounded-2xl rounded-tl-sm shadow-sm overflow-hidden"
+                  style={{ minWidth: 80 }}
+                >
+                  {step.type === 'text' && (
+                    <div className="px-3 py-2">
+                      <p className="text-sm text-gray-800 whitespace-pre-wrap break-words leading-relaxed">
+                        {step.content || <span className="text-gray-400 italic">Mensagem vazia</span>}
+                      </p>
+                      <p className="text-[10px] text-gray-400 text-right mt-1">agora ✓✓</p>
+                    </div>
+                  )}
+
+                  {step.type === 'image' && step.content && (
+                    <div>
+                      <img
+                        src={step.content}
+                        alt="imagem"
+                        className="w-full max-h-48 object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><rect fill="%23eee" width="200" height="100"/><text x="50%" y="50%" text-anchor="middle" fill="%23aaa" dy=".3em">Imagem</text></svg>'; }}
+                      />
+                      <p className="text-[10px] text-gray-400 text-right px-2 py-1">agora ✓✓</p>
+                    </div>
+                  )}
+
+                  {step.type === 'audio' && (
+                    <div className="px-3 py-2">
+                      <div className="flex items-center gap-2 bg-[#f0f0f0] rounded-xl px-3 py-2">
+                        <div className="w-8 h-8 rounded-full bg-[#25D366] flex items-center justify-center shrink-0">
+                          <Mic size={14} className="text-white" />
+                        </div>
+                        {step.content ? (
+                          <audio controls src={step.content} className="h-8" style={{ minWidth: 140 }} />
+                        ) : (
+                          <div className="text-xs text-gray-400">Áudio não definido</div>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-400 text-right mt-1">agora ✓✓</p>
+                    </div>
+                  )}
+
+                  {(step.type as string) === 'video' && (
+                    <div>
+                      {step.content ? (
+                        <video src={step.content} controls className="w-full max-h-48 object-cover" />
+                      ) : (
+                        <div className="bg-gray-200 h-24 flex items-center justify-center text-gray-400 text-sm">Vídeo não definido</div>
+                      )}
+                      <p className="text-[10px] text-gray-400 text-right px-2 py-1">agora ✓✓</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className="bg-[#F0F2F5] px-4 py-3 shrink-0 flex items-center justify-between">
+          <span className="text-xs text-gray-500">
+            {nonDelaySteps.length} mensagem(s) • visualização somente
+          </span>
+          <button onClick={onClose} className="text-xs bg-[#075E54] text-white px-3 py-1.5 rounded-full hover:bg-[#064e46]">
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Flow card ─────────────────────────────────────────────────────────────────
 function FlowCard({
   flow,
@@ -516,12 +642,14 @@ function FlowCard({
   onDelete,
   onToggle,
   onTrigger,
+  onSimulate,
 }: {
   flow: Flow;
   onEdit: () => void;
   onDelete: () => void;
   onToggle: () => void;
   onTrigger: () => void;
+  onSimulate: () => void;
 }) {
   const steps = flow.steps || [];
   const textSteps = steps.filter((s) => s.type !== 'delay').length;
@@ -563,6 +691,9 @@ function FlowCard({
           >
             {flow.active ? <ToggleRight size={20} className="text-blue-500" /> : <ToggleLeft size={20} />}
           </button>
+          <button onClick={onSimulate} title="Simular fluxo" className="p-2 text-gray-400 hover:text-purple-600">
+            <Eye size={16} />
+          </button>
           <button onClick={onTrigger} title="Disparar manualmente" className="p-2 text-gray-400 hover:text-green-600">
             <Play size={16} />
           </button>
@@ -602,6 +733,7 @@ export default function FlowsPage() {
   const [editingFlow, setEditingFlow] = useState<Flow | null>(null);
   const [creatingNew, setCreatingNew] = useState(false);
   const [triggeringFlow, setTriggeringFlow] = useState<Flow | null>(null);
+  const [simulatingFlow, setSimulatingFlow] = useState<Flow | null>(null);
 
   async function loadFlows() {
     try {
@@ -701,6 +833,7 @@ export default function FlowsPage() {
               onDelete={() => handleDelete(flow.id)}
               onToggle={() => handleToggle(flow)}
               onTrigger={() => setTriggeringFlow(flow)}
+              onSimulate={() => setSimulatingFlow(flow)}
             />
           ))}
         </div>
@@ -729,6 +862,14 @@ export default function FlowsPage() {
         <TriggerModal
           flow={triggeringFlow}
           onClose={() => setTriggeringFlow(null)}
+        />
+      )}
+
+      {/* Simulate modal */}
+      {simulatingFlow && (
+        <SimulateModal
+          flow={simulatingFlow}
+          onClose={() => setSimulatingFlow(null)}
         />
       )}
     </div>
