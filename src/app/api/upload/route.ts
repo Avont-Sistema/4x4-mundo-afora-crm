@@ -34,5 +34,9 @@ export async function POST(request: NextRequest) {
   const filename = `flows/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
   const blob = await put(filename, file, { access: 'private' });
 
-  return NextResponse.json({ url: blob.url });
+  // Retorna URL do proxy público (o blob privado exige auth que o bot não tem)
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://4x4-mundo-afora-crm-iota.vercel.app';
+  const proxyUrl = `${baseUrl}/api/blob?src=${encodeURIComponent(blob.url)}`;
+
+  return NextResponse.json({ url: proxyUrl });
 }

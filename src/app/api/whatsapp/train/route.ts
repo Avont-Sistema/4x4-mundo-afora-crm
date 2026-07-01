@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { resolve } from '@/lib/integrationsStore';
 import { getSettings, updateSettings } from '@/lib/settingsStore';
-import { createFlow, listFlows } from '@/lib/flowsStore';
+import { createFlow, updateFlow, listFlows } from '@/lib/flowsStore';
 import { kvLoad, kvSave } from '@/lib/kvStore';
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -160,20 +160,27 @@ export async function POST(request: NextRequest) {
     actionsCreated.push('Instruções do operador atualizadas');
   }
 
-  // Aplica: cria fluxos
+  // Aplica: cria ou atualiza fluxos
   for (const f of aiResponse.createFlows || []) {
     try {
-      await createFlow({
+      const flowData = {
         name: f.name || 'Fluxo treinamento',
         description: f.description || '',
         trigger: f.trigger || 'manual',
         triggerData: f.triggerData || {},
         active: true,
         steps: (f.steps || []).map((s: any, i: number) => ({ ...s, order: i })),
-      });
-      actionsCreated.push(`Fluxo criado: "${f.name}"`);
+      };
+      const existing = flows.find((ef) => ef.name.toLowerCase() === flowData.name.toLowerCase());
+      if (existing) {
+        await updateFlow(existing.id, flowData);
+        actionsCreated.push(`Fluxo atualizado: "${f.name}"`);
+      } else {
+        await createFlow(flowData);
+        actionsCreated.push(`Fluxo criado: "${f.name}"`);
+      }
     } catch (e: any) {
-      console.error('[train] erro ao criar fluxo:', e?.message);
+      console.error('[train] erro ao salvar fluxo:', e?.message);
     }
   }
 
