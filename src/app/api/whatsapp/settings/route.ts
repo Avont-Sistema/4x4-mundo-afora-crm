@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSettings, updateSettings } from '@/lib/settingsStore';
 
 export async function GET() {
-  return NextResponse.json({ settings: getSettings() });
+  return NextResponse.json({ settings: await getSettings() });
 }
 
 export async function POST(request: NextRequest) {
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     ];
     const clean: any = {};
     for (const k of allowed) if (patch[k] !== undefined) clean[k] = patch[k];
-    const settings = updateSettings(clean);
+    const settings = await updateSettings(clean);
     return NextResponse.json({ settings });
   } catch (error: any) {
     return NextResponse.json(

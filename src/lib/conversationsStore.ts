@@ -1,7 +1,6 @@
-import fs from 'fs';
-import path from 'path';
+import { kvLoad, kvSave } from './kvStore';
 
-// Conversas do WhatsApp, indexadas por telefone (jid), em .data/conversations.json
+// Conversas do WhatsApp, indexadas por telefone (jid), persistidas via kvStore.
 
 export type ConvMode = 'bot' | 'human' | 'resolved';
 
@@ -9,7 +8,7 @@ export interface ConvMessage {
   role: 'user' | 'assistant';
   content: string;
   at: string;
-  via?: 'bot' | 'human'; // quem enviou (quando assistant)
+  via?: 'bot' | 'human';
 }
 
 export interface Conversation {
@@ -23,49 +22,41 @@ export interface Conversation {
   updatedAt: string;
 }
 
-const DATA_DIR = path.join(process.cwd(), '.data');
-const FILE = path.join(DATA_DIR, 'conversations.json');
-
+const KV_KEY = 'conversations';
 let cache: Record<string, Conversation> | null = null;
 
-function load(): Record<string, Conversation> {
+async function load(): Promise<Record<string, Conversation>> {
   if (cache) return cache;
   try {
-    if (fs.existsSync(FILE)) {
-      cache = JSON.parse(fs.readFileSync(FILE, 'utf-8'));
-      return cache!;
-    }
-  } catch (err) {
-    console.error('Erro ao ler conversations.json:', err);
+    cache = (await kvLoad<Record<string, Conversation>>(KV_KEY)) ?? {};
+  } catch {
+    cache = {};
   }
-  cache = {};
-  persist();
   return cache;
 }
 
-function persist() {
+async function persist(): Promise<void> {
   try {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(FILE, JSON.stringify(cache ?? {}, null, 2), 'utf-8');
+    await kvSave(KV_KEY, cache ?? {});
   } catch (err) {
-    console.error('Erro ao escrever conversations.json:', err);
+    console.error('Erro ao escrever conversations:', err);
   }
 }
 
-export function getConversation(phone: string): Conversation | undefined {
-  return load()[phone];
+export async function getConversation(phone: string): Promise<Conversation | undefined> {
+  return (await load())[phone];
 }
 
-export function listConversations(): Conversation[] {
-  return Object.values(load()).sort(
+export async function listConversations(): Promise<Conversation[]> {
+  return Object.values(await load()).sort(
     (a, b) =>
       new Date(b.lastAt || b.updatedAt).getTime() -
       new Date(a.lastAt || a.updatedAt).getTime()
   );
 }
 
-function ensure(phone: string, contactName?: string): Conversation {
-  const all = load();
+async function ensure(phone: string, contactName?: string): Promise<Conversation> {
+  const all = await load();
   if (!all[phone]) {
     const now = new Date().toISOString();
     all[phone] = {
@@ -82,42 +73,42 @@ function ensure(phone: string, contactName?: string): Conversation {
   return all[phone];
 }
 
-export function appendMessage(
+export async function appendMessage(
   phone: string,
   msg: { role: 'user' | 'assistant'; content: string; via?: 'bot' | 'human' },
   contactName?: string
-): Conversation {
-  const conv = ensure(phone, contactName);
+): Promise<Conversation> {
+  const conv = await ensure(phone, contactName);
   const now = new Date().toISOString();
   conv.messages.push({ ...msg, at: now });
   conv.lastMessage = msg.content;
   conv.lastAt = now;
   conv.updatedAt = now;
-  persist();
+  await persist();
   return conv;
 }
 
-export function setMode(phone: string, mode: ConvMode): Conversation | undefined {
-  const all = load();
+export async function setMode(phone: string, mode: ConvMode): Promise<Conversation | undefined> {
+  const all = await load();
   if (!all[phone]) return undefined;
   all[phone].mode = mode;
   all[phone].updatedAt = new Date().toISOString();
   cache = all;
-  persist();
+  await persist();
   return all[phone];
 }
 
-export function clearConversation(phone: string) {
-  const all = load();
+export async function clearConversation(phone: string): Promise<void> {
+  const all = await load();
   if (all[phone]) {
     all[phone].messages = [];
     all[phone].lastMessage = undefined;
     cache = all;
-    persist();
+    await persist();
   }
 }
 
-// Histórico no formato esperado pela API do Claude (só user/assistant)
+// Histórico no formato esperado pela API (só user/assistant)
 export function toClaudeHistory(conv: Conversation, max = 20) {
   return conv.messages
     .slice(-max)

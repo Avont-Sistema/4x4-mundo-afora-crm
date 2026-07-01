@@ -1,7 +1,6 @@
-import fs from 'fs';
-import path from 'path';
+import { kvLoad, kvSave } from './kvStore';
 
-// Configurações globais do agente/atendimento, em .data/settings.json
+// Configurações globais do agente/atendimento, persistidas via kvStore.
 
 export interface BusinessHour {
   day: number; // 0=domingo ... 6=sábado
@@ -18,8 +17,7 @@ export interface Settings {
   outOfHoursMessage: string;
 }
 
-const DATA_DIR = path.join(process.cwd(), '.data');
-const FILE = path.join(DATA_DIR, 'settings.json');
+const KV_KEY = 'settings';
 
 const DEFAULTS: Settings = {
   botPaused: false,
@@ -40,42 +38,37 @@ const DEFAULTS: Settings = {
 
 let cache: Settings | null = null;
 
-function load(): Settings {
+async function load(): Promise<Settings> {
   if (cache) return cache;
   try {
-    if (fs.existsSync(FILE)) {
-      cache = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(FILE, 'utf-8')) };
-      return cache!;
-    }
-  } catch (err) {
-    console.error('Erro ao ler settings.json:', err);
+    const stored = await kvLoad<Partial<Settings>>(KV_KEY);
+    cache = stored ? { ...DEFAULTS, ...stored } : { ...DEFAULTS };
+  } catch {
+    cache = { ...DEFAULTS };
   }
-  cache = { ...DEFAULTS };
-  persist();
   return cache;
 }
 
-function persist() {
+async function persist(): Promise<void> {
   try {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(FILE, JSON.stringify(cache ?? DEFAULTS, null, 2), 'utf-8');
+    await kvSave(KV_KEY, cache ?? DEFAULTS);
   } catch (err) {
-    console.error('Erro ao escrever settings.json:', err);
+    console.error('Erro ao escrever settings:', err);
   }
 }
 
-export function getSettings(): Settings {
+export async function getSettings(): Promise<Settings> {
   return load();
 }
 
-export function updateSettings(patch: Partial<Settings>): Settings {
-  cache = { ...load(), ...patch };
-  persist();
+export async function updateSettings(patch: Partial<Settings>): Promise<Settings> {
+  cache = { ...(await load()), ...patch };
+  await persist();
   return cache;
 }
 
-export function isWithinBusinessHours(date = new Date()): boolean {
-  const s = load();
+export async function isWithinBusinessHours(date = new Date()): Promise<boolean> {
+  const s = await load();
   if (!s.businessHoursEnabled) return true;
   const day = date.getDay();
   const rule = s.businessHours.find((h) => h.day === day);

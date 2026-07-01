@@ -365,7 +365,7 @@ export async function executeTool(
     }
 
     case 'escalar_humano': {
-      setMode(phone, 'human');
+      await setMode(phone, 'human');
       return { sucesso: true, mensagem: 'Conversa transferida para atendimento humano.' };
     }
 

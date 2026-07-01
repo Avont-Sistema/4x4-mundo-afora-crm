@@ -179,6 +179,12 @@ async function fallbackReply(
       }
       return expDetail(contextExp);
     }
+    // Pergunta contextual mas sem expedição mencionada — mostra as opções disponíveis
+    if (openExp.length > 0) {
+      const nomes = openExp.map((e) => `• ${e.routeName}`).join('\n');
+      return `Claro! Temos estas expedições disponíveis:\n${nomes}\n\nSobre qual você gostaria de saber mais?`;
+    }
+    return `Claro! No momento estou organizando as próximas saídas. Me passa seu nome que te aviso quando abrir! 😊`;
   }
 
   // 3. Lista de expedições abertas (só quando perguntando de forma genérica)
@@ -218,12 +224,29 @@ async function fallbackReply(
   if (m.match(/inclui|incluso|pacote/)) return negocio.faq.find((f) => f.pergunta === 'incluso')!.resposta;
   if (m.match(/4x4|carro|veiculo|precisa/)) return negocio.faq.find((f) => f.pergunta === 'precisa de carro 4x4')!.resposta;
 
-  // 8. Saudação pura
-  if (m.match(/^(oi|ola|bom dia|boa tarde|boa noite|hey|hello|salve|tudo bem)/)) {
+  // 8. Saudação / social — resposta contextual baseada no histórico
+  if (m.match(/^(oi+|ola|bom dia|boa tarde|boa noite|hey|hello|salve)\b/) && message.length < 30) {
+    const jaFoiAtendido = history.some((h) => h.role === 'assistant');
+    if (jaFoiAtendido) {
+      return `Pode falar! Estou aqui para te ajudar com expedições, valores e reservas. 😊`;
+    }
     return `Olá! 👋 Sou a assistente da ${negocio.empresa}. Posso te mostrar as expedições, valores e já reservar sua vaga. O que você procura?`;
   }
 
-  // 9. Contexto: só usa expedição recente se as últimas mensagens ainda falam de expedição
+  if (m.match(/^tudo (bem|bom|certo|ok)\b/) && message.length < 25) {
+    return `Tudo ótimo por aqui! 😊 Posso te ajudar com informações sobre expedições, valores ou reservas. O que você procura?`;
+  }
+
+  // 9. Mensagem com "mais informações", "me conta", "sobre isso" sem contexto de expedição
+  if (m.match(/mais info|mais detal|me conta|me diz|sobre isso|sobre ela|como funciona/)) {
+    if (openExp.length > 0) {
+      const nomes = openExp.map((e) => `• ${e.routeName}`).join('\n');
+      return `Claro! Temos estas expedições disponíveis:\n${nomes}\n\nSobre qual você gostaria de saber mais?`;
+    }
+    return `Claro! No momento estou organizando as próximas saídas. Me passa seu nome que te aviso quando abrir! 😊`;
+  }
+
+  // 10. Contexto: só usa expedição recente se as últimas mensagens ainda falam de expedição
   const recentHistory = history.slice(-4);
   const lastExp = findLastMentionedExp(recentHistory, allExp);
   if (lastExp) {

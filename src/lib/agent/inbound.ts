@@ -24,10 +24,10 @@ export async function processInbound(
   text: string,
   contactName?: string
 ): Promise<InboundResult> {
-  const settings = getSettings();
+  const settings = await getSettings();
 
   // 1. registra a mensagem recebida
-  const conv = appendMessage(phone, { role: 'user', content: text }, contactName);
+  const conv = await appendMessage(phone, { role: 'user', content: text }, contactName);
 
   // 2. auto-cadastro de lead (telefone novo => novo lead atendido pela IA)
   let leadCreated = false;
@@ -67,9 +67,9 @@ export async function processInbound(
   }
 
   // 4. fora do horário comercial => resposta automática fixa
-  if (!isWithinBusinessHours()) {
+  if (!(await isWithinBusinessHours())) {
     const msg = settings.outOfHoursMessage;
-    appendMessage(phone, { role: 'assistant', content: msg, via: 'bot' });
+    await appendMessage(phone, { role: 'assistant', content: msg, via: 'bot' });
     return { reply: msg, mode: conv.mode, leadCreated, aiEnabled: ai, reason: 'out_of_hours' };
   }
 
@@ -77,7 +77,7 @@ export async function processInbound(
   const history = toClaudeHistory(conv);
   const { reply } = await runAgent(phone, history, settings.operatorNotes);
 
-  appendMessage(phone, { role: 'assistant', content: reply, via: 'bot' });
+  await appendMessage(phone, { role: 'assistant', content: reply, via: 'bot' });
 
   return { reply, mode: conv.mode, leadCreated, aiEnabled: ai };
 }
