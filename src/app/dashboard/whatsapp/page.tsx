@@ -180,16 +180,29 @@ export default function WhatsAppPage() {
   }, []);
 
   const handleFileAttach = async (file: File) => {
-    if (file.size > 50 * 1024 * 1024) { toast.error('Arquivo maior que 50 MB'); return; }
+    if (file.size > 100 * 1024 * 1024) { toast.error('Arquivo maior que 100 MB'); return; }
     setUploadingFile(true);
     const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'audio' : 'video';
     try {
-      const form = new FormData();
-      form.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: form });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Erro no upload'); return; }
-      setTrainAttachments((a) => [...a, { type, url: data.url, name: file.name }]);
+      let url: string;
+      const isLarge = file.type.startsWith('video/') || file.size > 4 * 1024 * 1024;
+      if (isLarge) {
+        // Upload direto do browser para o Blob (sem passar pelo serverless)
+        const { upload } = await import('@vercel/blob/client');
+        const filename = `flows/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const blob = await upload(filename, file, { access: 'public', handleUploadUrl: '/api/upload' });
+        url = blob.url;
+      } else {
+        const form = new FormData();
+        form.append('file', file);
+        const res = await fetch('/api/upload', { method: 'POST', body: form });
+        if (res.status === 413) { toast.error('Arquivo muito grande. Tente um de menor tamanho.'); return; }
+        let data: any = {};
+        try { data = await res.json(); } catch { /* resposta não-JSON */ }
+        if (!res.ok) { toast.error(data.error || 'Erro no upload'); return; }
+        url = data.url;
+      }
+      setTrainAttachments((a) => [...a, { type, url, name: file.name }]);
     } catch (e: any) { toast.error(e?.message || 'Falha no upload'); }
     finally { setUploadingFile(false); }
   };
