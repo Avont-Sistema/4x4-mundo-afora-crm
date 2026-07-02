@@ -3,6 +3,7 @@ import { kvLoad, kvSave } from './kvStore';
 export type BroadcastStatus = 'draft' | 'running' | 'paused' | 'completed' | 'cancelled';
 export type RecipientStatus = 'pending' | 'sent' | 'failed' | 'skipped';
 export type RecipientSource = 'all_leads' | 'all_clients' | 'custom';
+export type BroadcastMode = 'push' | 'poll';
 
 export interface Broadcast {
   id: string;
@@ -11,6 +12,7 @@ export interface Broadcast {
   mediaUrl?: string;
   mediaType?: string;
   status: BroadcastStatus;
+  mode?: BroadcastMode; // push = bot envia sozinho e chama /callback; poll = bot busca em /pending-messages
   recipientSource: RecipientSource;
   customPhones?: string[]; // stored phones for custom source
   intervalSec: number;
@@ -63,6 +65,14 @@ function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, '');
   if (digits.startsWith('55') && digits.length >= 12) return digits;
   return '55' + digits;
+}
+
+// Número BR entregável: 55 + DDD (2 dígitos) + 8 ou 9 dígitos = 12–13 no total.
+// LIDs do WhatsApp (IDs internos de ~15 dígitos, salvos como "telefone" em leads
+// vindos de contas com privacidade de número) e números digitados errado ficam fora —
+// enviar para eles não gera erro no Baileys, a mensagem só nunca chega.
+export function isDeliverablePhone(normalized: string): boolean {
+  return /^55\d{10,11}$/.test(normalized);
 }
 
 // ── CRUD ──────────────────────────────────────────────────────────────────────
@@ -146,7 +156,7 @@ export async function getBroadcastStats(broadcastId: string) {
 export async function startBroadcast(
   id: string,
   resolvedRecipients?: { phone: string; name?: string }[]
-): Promise<{ count: number }> {
+): Promise<{ count: number; invalid: number }> {
   const broadcast = await getBroadcast(id);
   if (!broadcast) throw new Error('Disparo não encontrado');
   if (broadcast.status === 'running') throw new Error('Disparo já está em execução');
@@ -159,17 +169,24 @@ export async function startBroadcast(
     rawRecipients = (broadcast.customPhones ?? []).map((p) => ({ phone: p }));
   }
 
-  // Normalize and deduplicate phones
+  // Normalize, deduplicate and separate deliverable phones from invalid ones (LIDs, typos)
   const seen = new Set<string>();
-  const recipients = rawRecipients
-    .map((r) => ({ ...r, phone: normalizePhone(r.phone) }))
-    .filter((r) => {
-      if (r.phone.length < 10 || seen.has(r.phone)) return false;
-      seen.add(r.phone);
-      return true;
-    });
+  const valid: { phone: string; name?: string }[] = [];
+  const invalid: { phone: string; name?: string }[] = [];
+  for (const r of rawRecipients) {
+    const phone = normalizePhone(r.phone);
+    if (phone.length < 10 || seen.has(phone)) continue;
+    seen.add(phone);
+    (isDeliverablePhone(phone) ? valid : invalid).push({ ...r, phone });
+  }
 
-  if (recipients.length === 0) throw new Error('Nenhum destinatário encontrado');
+  if (valid.length === 0) {
+    throw new Error(
+      invalid.length > 0
+        ? `Nenhum número válido: ${invalid.length} destinatário(s) têm ID interno do WhatsApp (@lid) ou número mal formatado no lugar do telefone`
+        : 'Nenhum destinatário encontrado'
+    );
+  }
 
   // Delete pending recipients from previous runs
   const existing = await loadRecipients(id);
@@ -179,7 +196,7 @@ export async function startBroadcast(
     ? new Date(broadcast.scheduledAt)
     : new Date();
 
-  const newRecipients: BroadcastRecipient[] = recipients.map((r, idx) => ({
+  const newRecipients: BroadcastRecipient[] = valid.map((r, idx) => ({
     id: uid(),
     broadcastId: id,
     phone: r.phone,
@@ -189,10 +206,22 @@ export async function startBroadcast(
     createdAt: new Date().toISOString(),
   }));
 
-  await saveRecipients(id, [...kept, ...newRecipients]);
+  // Invalid recipients are recorded as failed so the UI tells the truth instead of "sent"
+  const invalidRecipients: BroadcastRecipient[] = invalid.map((r) => ({
+    id: uid(),
+    broadcastId: id,
+    phone: r.phone,
+    name: r.name,
+    status: 'failed',
+    error: 'Número inválido — é um ID interno do WhatsApp (@lid) ou está mal formatado, não um telefone real',
+    scheduledAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+  }));
+
+  await saveRecipients(id, [...kept, ...newRecipients, ...invalidRecipients]);
   await updateBroadcast(id, { status: 'running', startedAt: new Date().toISOString() });
 
-  return { count: newRecipients.length };
+  return { count: newRecipients.length, invalid: invalidRecipients.length };
 }
 
 // ── Pause / Resume / Cancel ───────────────────────────────────────────────────
@@ -244,7 +273,11 @@ export async function cancelBroadcast(id: string): Promise<void> {
 export async function getPendingBroadcastMessages() {
   const now = new Date().toISOString();
   const broadcasts = await loadBroadcasts();
-  const runningIds = broadcasts.filter((b) => b.status === 'running').map((b) => b.id);
+  // mode 'push': o bot já recebeu a lista completa via /api/broadcast/send e envia
+  // sozinho — servir esses destinatários aqui de novo causaria mensagem duplicada.
+  const runningIds = broadcasts
+    .filter((b) => b.status === 'running' && b.mode !== 'push')
+    .map((b) => b.id);
   if (runningIds.length === 0) return [];
 
   const results: Array<Record<string, unknown>> = [];

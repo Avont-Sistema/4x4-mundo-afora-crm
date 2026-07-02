@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { startBroadcast, getBroadcast, getBroadcastRecipients } from '@/lib/broadcastStore';
+import { startBroadcast, getBroadcast, getBroadcastRecipients, updateBroadcast } from '@/lib/broadcastStore';
 import { botFetch } from '@/lib/botProxy';
 
 // CRM's own public URL — needed so the bot can call back /api/broadcasts/[id]/callback
@@ -32,13 +32,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
         .filter((r) => r.phone.length > 0);
     }
 
-    // Create recipient records in kvStore (also used as fallback for frontend /process polling)
-    const { count } = await startBroadcast(id, resolvedRecipients);
+    // Create recipient records (invalid phones — LIDs, typos — are recorded as failed)
+    const { count, invalid } = await startBroadcast(id, resolvedRecipients);
 
-    // Attempt push-based delivery via bot's /api/broadcast/send endpoint
-    // Bot sends messages autonomously and calls back /callback per recipient
+    // Attempt push-based delivery via bot's /api/broadcast/send endpoint.
+    // Bot sends messages autonomously and calls back /callback per recipient.
     try {
-      const recipients = await getBroadcastRecipients(id);
+      const recipients = (await getBroadcastRecipients(id)).filter((r) => r.status === 'pending');
       const callbackUrl = `${CRM_URL}/api/broadcasts/${id}/callback`;
 
       const res = await botFetch('/api/broadcast/send', {
@@ -60,7 +60,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       });
 
       if (res.ok) {
-        return NextResponse.json({ ok: true, count, mode: 'push' });
+        // Marca o modo para desativar os caminhos de poll (senão a mensagem sai duplicada)
+        await updateBroadcast(id, { mode: 'push' });
+        return NextResponse.json({ ok: true, count, invalid, mode: 'push' });
       }
       // Bot returned non-ok — fall through to poll mode
       console.warn('[broadcast:start] bot /api/broadcast/send retornou', res.status, '— usando poll');
@@ -69,8 +71,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       console.warn('[broadcast:start] bot sem endpoint broadcast, usando poll:', (e as Error).message);
     }
 
-    // Fallback: frontend triggers /process every 15s (existing behaviour)
-    return NextResponse.json({ ok: true, count, mode: 'poll' });
+    // Fallback: o próprio bot busca as mensagens em /api/whatsapp/pending-messages a cada 30s
+    await updateBroadcast(id, { mode: 'poll' });
+    return NextResponse.json({ ok: true, count, invalid, mode: 'poll' });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }

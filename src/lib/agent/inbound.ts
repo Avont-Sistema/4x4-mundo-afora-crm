@@ -1,6 +1,6 @@
 import { appendMessage, toClaudeHistory } from '@/lib/conversationsStore';
 import { getSettings, isWithinBusinessHours } from '@/lib/settingsStore';
-import { findLeadByPhone, upsertLeadFromContact } from '@/lib/leadsStore';
+import { findLeadByPhone, upsertLeadFromContact, updateLead } from '@/lib/leadsStore';
 import { runAgent, aiEnabled } from './brain';
 import { getFlowsForTrigger, triggerFlow, wasFlowRecentlyTriggered } from '@/lib/flowsStore';
 
@@ -23,20 +23,32 @@ function detectInterest(text: string): string | undefined {
 export async function processInbound(
   phone: string,
   text: string,
-  contactName?: string
+  contactName?: string,
+  lid?: string
 ): Promise<InboundResult> {
   const settings = await getSettings();
 
   // 1. registra a mensagem recebida
   const conv = await appendMessage(phone, { role: 'user', content: text }, contactName);
 
+  // 1b. auto-correção: leads antigos foram salvos com o LID (ID interno do WhatsApp)
+  // no lugar do telefone. Se o bot mandou o LID junto e existe um lead com esse LID
+  // como telefone, atualiza para o número real — sem isso o disparo nunca o alcança.
+  const leadPhone = phone.includes('@lid') ? phone : phone.split('@')[0];
+  if (lid && !phone.includes('@lid')) {
+    const leadByLid = await findLeadByPhone(lid);
+    if (leadByLid) {
+      await updateLead(leadByLid.id, { phone: leadPhone, whatsapp: leadPhone });
+    }
+  }
+
   // 2. auto-cadastro de lead (telefone novo => novo lead atendido pela IA)
   let leadCreated = false;
-  const existingLead = await findLeadByPhone(phone);
+  const existingLead = await findLeadByPhone(leadPhone);
   const up = await upsertLeadFromContact({
-    name: contactName || existingLead?.name || phone,
-    phone,
-    whatsapp: phone,
+    name: contactName || existingLead?.name || leadPhone,
+    phone: leadPhone,
+    whatsapp: leadPhone,
     source: 'whatsapp',
     stage: existingLead?.stage || 'novo',
     handledBy: 'ia',

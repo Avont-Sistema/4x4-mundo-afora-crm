@@ -19,11 +19,13 @@ export async function POST(request: NextRequest) {
       }
     }
     const body = await request.json();
-    const { phone, text, contactName } = body;
+    // lid: JID interno @lid da conta (quando o número tem privacidade ativada);
+    // phone já vem resolvido para o número real pelo bot.
+    const { phone, text, contactName, lid } = body;
     if (!phone || !text) {
       return NextResponse.json({ error: 'phone e text são obrigatórios' }, { status: 400 });
     }
-    const result = await processInbound(phone, text, contactName);
+    const result = await processInbound(phone, text, contactName, lid);
     return NextResponse.json(result);
   } catch (error: any) {
     console.error('WhatsApp inbound error:', error);

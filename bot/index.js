@@ -11,6 +11,7 @@ const pino = require('pino');
 const qrcode = require('qrcode');
 const fs = require('fs');
 const path = require('path');
+const { registerBroadcastRoutes } = require('./broadcast-addon');
 
 // ── Configuração ──────────────────────────────────────────────────────────────
 const PORT           = process.env.PORT           || 3001;
@@ -37,6 +38,36 @@ const lidToJid = new Map();
 function resolveSendJid(jid) {
   if (!jid.includes('@lid')) return jid;
   return lidToJid.get(jid) || jid;
+}
+
+// Valida no WhatsApp se o número existe e resolve o JID real de entrega.
+// Necessário porque sock.sendMessage() para um JID inexistente NÃO lança erro —
+// o servidor rejeita de forma assíncrona (463) e a mensagem simplesmente não chega.
+// Para números BR tenta também a variante com/sem o nono dígito.
+// Retorna { ok, jid } ou { ok: false, error }.
+async function resolveDeliverableJid(rawJid) {
+  if (rawJid.includes('@lid')) return { ok: true, jid: resolveSendJid(rawJid) };
+
+  const digits = String(rawJid).split('@')[0].replace(/\D/g, '');
+  if (!digits) return { ok: false, error: 'Número vazio' };
+
+  const candidates = [digits];
+  if (digits.startsWith('55')) {
+    if (digits.length === 13) candidates.push(digits.slice(0, 4) + digits.slice(5));       // remove o 9
+    if (digits.length === 12) candidates.push(digits.slice(0, 4) + '9' + digits.slice(4)); // adiciona o 9
+  }
+
+  for (const cand of candidates) {
+    try {
+      const results = await sock.onWhatsApp(cand);
+      if (results?.[0]?.exists && results[0].jid) {
+        return { ok: true, jid: results[0].jid };
+      }
+    } catch (e) {
+      console.warn(`[jid] onWhatsApp(${cand}) falhou: ${e.message}`);
+    }
+  }
+  return { ok: false, error: `Número ${digits} não encontrado no WhatsApp` };
 }
 
 let settings = {
@@ -237,10 +268,23 @@ async function connectWhatsApp() {
         const headers = { 'Content-Type': 'application/json' };
         if (CONNECTOR_TOKEN) headers['x-connector-token'] = CONNECTOR_TOKEN;
 
+        // Envia ao CRM o número REAL (não o @lid) — senão o lead é criado com o
+        // ID interno do WhatsApp como telefone e disparos nunca o alcançam.
+        // O @lid vai no campo `lid` para o CRM corrigir leads antigos.
+        const isLid = phone.includes('@lid');
+        const realJid = isLid
+          ? (lidToJid.get(phone) || msg.key.senderPn || phone)
+          : phone;
+
         const res = await fetch(`${CRM_URL}/api/whatsapp/inbound`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ phone, text, contactName }),
+          body: JSON.stringify({
+            phone: realJid,
+            lid: isLid ? phone : undefined,
+            text,
+            contactName,
+          }),
         });
 
         const data = await res.json();
@@ -388,33 +432,62 @@ app.get('/api/history/:phone', auth, (req, res) => {
 });
 
 app.post('/api/send', auth, async (req, res) => {
-  const { phone, text } = req.body;
-  if (!phone || !text) return res.status(400).json({ error: 'phone e text obrigatórios' });
+  const { phone, text, mediaUrl, mediaType } = req.body;
+  if (!phone || (!text && !mediaUrl)) return res.status(400).json({ error: 'phone e text (ou mediaUrl) obrigatórios' });
   if (!isConnected || !sock) return res.status(503).json({ error: 'WhatsApp não conectado' });
 
   try {
     let conv = conversations.get(phone);
     const quotedMsg = conv?.lastReceivedMsg;
-    // usa quoted para garantir entrega em JIDs @lid
-    const sendJid = resolveSendJid(phone);
-    if (quotedMsg) {
-      await sock.sendMessage(sendJid, { text }, { quoted: quotedMsg });
+
+    // Conversa conhecida ou @lid: usa o JID mapeado (com quoted para garantir entrega).
+    // Número desconhecido: valida via onWhatsApp — enviar para JID inexistente não
+    // lança erro, a mensagem só não chega. Melhor falhar aqui com erro claro.
+    let sendJid;
+    if (phone.includes('@lid') || quotedMsg) {
+      sendJid = resolveSendJid(phone);
     } else {
+      const resolved = await resolveDeliverableJid(phone);
+      if (!resolved.ok) return res.status(404).json({ error: resolved.error });
+      sendJid = resolved.jid;
+    }
+
+    let content;
+    if (mediaUrl && mediaType === 'image') {
+      content = { image: { url: mediaUrl }, caption: text || '' };
+    } else if (mediaUrl && mediaType === 'video') {
+      content = { video: { url: mediaUrl }, caption: text || '' };
+    } else if (mediaUrl && mediaType === 'audio') {
+      content = { audio: { url: mediaUrl }, mimetype: 'audio/mp4', ptt: false };
+    } else if (mediaUrl && mediaType === 'document') {
+      content = { document: { url: mediaUrl }, caption: text || '' };
+    } else {
+      content = { text };
+    }
+
+    if (quotedMsg) {
+      await sock.sendMessage(sendJid, content, { quoted: quotedMsg });
+    } else {
+      await sock.sendMessage(sendJid, content);
+    }
+
+    // Áudio não tem caption — envia o texto em mensagem separada
+    if (mediaUrl && mediaType === 'audio' && text) {
       await sock.sendMessage(sendJid, { text });
     }
 
     if (!conv) {
       conv = {
         phone, name: phone, stage: 'human', botActive: false,
-        expeditionInterest: null, lastMessage: text,
+        expeditionInterest: null, lastMessage: text || '[mídia]',
         updatedAt: new Date().toISOString(),
         waitingMinutes: null, alertedOperator: false, history: [], lastReceivedMsg: null,
       };
       conversations.set(phone, conv);
     }
-    conv.lastMessage = text;
+    conv.lastMessage = text || '[mídia]';
     conv.updatedAt   = new Date().toISOString();
-    conv.history.push({ role: 'assistant', content: text, ts: new Date().toISOString(), via: 'operator' });
+    conv.history.push({ role: 'assistant', content: text || '[mídia]', ts: new Date().toISOString(), via: 'operator' });
 
     sendSSE({ type: 'message_sent', phone, text });
     res.json({ ok: true });
@@ -536,9 +609,31 @@ async function pollFlowMessages() {
     const phone = msg.run?.phone;
     if (!phone) continue;
 
-    const sendJid = resolveSendJid(phone);
+    // Valida o número antes de enviar — JID inexistente não gera erro no envio,
+    // a mensagem só não chega (era a causa de disparos "enviados" que não chegavam)
+    const resolved = await resolveDeliverableJid(phone);
+    if (!resolved.ok) {
+      console.error(`[flow] ✗ msg ${msg.id} número inválido: ${resolved.error}`);
+      try {
+        await fetch(`${CRM_URL}/api/whatsapp/pending-messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-bot-secret': BOT_SECRET },
+          body: JSON.stringify({ id: msg.id, runId: msg.runId, success: false, error: resolved.error }),
+        });
+      } catch (err) {
+        console.error('[flow] Erro ao reportar número inválido:', err.message);
+      }
+      continue;
+    }
+
+    const sendJid = resolved.jid;
     let success = true;
     let errorMsg = null;
+
+    // Broadcasts mandam o texto em `content` e a mídia em `mediaUrl`;
+    // fluxos mandam a URL da mídia direto em `content`.
+    const mediaSrc = msg.mediaUrl || msg.content;
+    const mediaCaption = msg.mediaUrl ? (msg.content || '') : '';
 
     try {
       // Mostra "digitando..." pelo tempo configurado na etapa
@@ -554,16 +649,15 @@ async function pollFlowMessages() {
       if (msg.type === 'text') {
         await sock.sendMessage(sendJid, { text: msg.content || '' });
       } else if (msg.type === 'image') {
-        // content é URL da imagem
         await sock.sendMessage(sendJid, {
-          image: { url: msg.content },
-          caption: '',
+          image: { url: mediaSrc },
+          caption: mediaCaption,
         });
       } else if (msg.type === 'audio') {
         // PTT exige 'audio/ogg; codecs=opus' — preserva o codec completo para OGG
         let detectedMime = 'audio/ogg; codecs=opus';
         try {
-          const head = await fetch(msg.content, { method: 'HEAD' });
+          const head = await fetch(mediaSrc, { method: 'HEAD' });
           const ct = (head.headers.get('content-type') || '').toLowerCase();
           if (ct.includes('ogg')) {
             detectedMime = 'audio/ogg; codecs=opus';
@@ -573,11 +667,11 @@ async function pollFlowMessages() {
             detectedMime = ct.split(';')[0].trim();
           }
         } catch { /* usa default */ }
-        console.log(`[flow] audio mime: ${detectedMime} url: ${msg.content}`);
+        console.log(`[flow] audio mime: ${detectedMime} url: ${mediaSrc}`);
         try {
           // Tenta como PTT (nota de voz)
           await sock.sendMessage(sendJid, {
-            audio: { url: msg.content },
+            audio: { url: mediaSrc },
             mimetype: detectedMime,
             ptt: true,
           });
@@ -585,14 +679,18 @@ async function pollFlowMessages() {
           console.warn(`[flow] PTT falhou (${e1.message}), tentando audio normal`);
           // Fallback: envia como áudio normal (não PTT)
           await sock.sendMessage(sendJid, {
-            audio: { url: msg.content },
+            audio: { url: mediaSrc },
             mimetype: detectedMime,
           });
         }
+        // Áudio não tem caption — texto do broadcast vai em mensagem separada
+        if (mediaCaption) {
+          await sock.sendMessage(sendJid, { text: mediaCaption });
+        }
       } else if (msg.type === 'video') {
         await sock.sendMessage(sendJid, {
-          video: { url: msg.content },
-          caption: '',
+          video: { url: mediaSrc },
+          caption: mediaCaption,
         });
       }
       console.log(`[flow] ✓ msg ${msg.id} enviada → ${sendJid}`);
@@ -614,6 +712,12 @@ async function pollFlowMessages() {
     }
   }
 }
+
+// ── Broadcast (disparos em massa do CRM) ──────────────────────────────────────
+registerBroadcastRoutes(app, () => (isConnected ? sock : null), {
+  botSecret: BOT_SECRET,
+  resolveJid: resolveDeliverableJid,
+});
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

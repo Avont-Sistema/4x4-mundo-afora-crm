@@ -121,7 +121,8 @@ export default function DisparosPage() {
     return () => clearInterval(iv);
   }, [load]);
 
-  // Auto-process running broadcasts every 15s (pushes messages via bot proxy)
+  // Verifica progresso/conclusão dos disparos em execução a cada 15s.
+  // O envio em si é feito pelo bot (push ou poll) — esta chamada não envia nada.
   useEffect(() => {
     const processRunning = async () => {
       const running = broadcasts.filter((b) => b.status === 'running');
@@ -202,6 +203,14 @@ export default function DisparosPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      if (data.invalid > 0) {
+        alert(
+          `Disparo iniciado com ${data.count} destinatário(s). ` +
+          `${data.invalid} número(s) inválido(s) foram marcados como falha — ` +
+          `provavelmente são IDs internos do WhatsApp (@lid) ou números mal formatados. ` +
+          `Veja os detalhes expandindo o disparo.`
+        );
+      }
       await load();
     } catch (e) {
       alert('Erro: ' + (e as Error).message);
