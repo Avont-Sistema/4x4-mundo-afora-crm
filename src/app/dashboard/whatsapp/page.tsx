@@ -16,6 +16,7 @@ type ConvMode = 'bot' | 'human' | 'resolved';
 
 interface BotConv {
   phone: string;
+  avatarPhone?: string; // JID usado para buscar a foto (pode diferir do phone p/ @lid)
   name: string | null;
   stage: string;
   botActive: boolean;
@@ -1015,7 +1016,7 @@ export default function WhatsAppPage() {
                   <ArrowLeft size={20} />
                 </button>
 
-                <Avatar phone={selected} name={selectedConv?.name} size={40} />
+                <Avatar phone={selectedConv?.avatarPhone || selected} name={selectedConv?.name} size={40} />
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -1374,7 +1375,7 @@ function ConvItem({
     >
       {/* Avatar com foto de perfil */}
       <div className="mt-0.5">
-        <Avatar phone={conv.phone} name={conv.name} size={44} waiting={isWaiting} />
+        <Avatar phone={conv.avatarPhone || conv.phone} name={conv.name} size={44} waiting={isWaiting} />
       </div>
 
       <div className="flex-1 min-w-0">

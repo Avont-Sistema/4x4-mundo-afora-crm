@@ -113,6 +113,9 @@ export async function processInbound(
     if (leadByLid) {
       await updateLead(leadByLid.id, { phone: leadPhone, whatsapp: leadPhone });
     }
+    // Também funde a conversa-fantasma registrada pelo @lid na conversa real
+    const { mergeConversationInto } = await import('@/lib/conversationsStore');
+    await mergeConversationInto(lid, phone);
   }
 
   // 2. auto-cadastro de lead (telefone novo => novo lead atendido pela IA)
