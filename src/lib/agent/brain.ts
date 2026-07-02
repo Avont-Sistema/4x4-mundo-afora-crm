@@ -4,7 +4,7 @@ import { masterPrompt, negocio } from './negocio';
 import { expeditionsStore, buildExpeditionDetail } from '@/lib/expeditionsStore';
 import { resolve } from '@/lib/integrationsStore';
 
-const MAX_HISTORY = 20;
+const MAX_HISTORY = 30;
 
 async function getClient(): Promise<OpenAI | null> {
   const key = (await resolve()).deepseekApiKey;
@@ -52,14 +52,18 @@ Responda SOMENTE com uma palavra:
 export async function runAgent(
   phone: string,
   history: { role: 'user' | 'assistant'; content: string }[],
-  operatorNotes?: string
+  operatorNotes?: string,
+  clientContext?: string
 ): Promise<{ reply: string; usedTools: string[] }> {
   const client = await getClient();
   if (!client) {
     return { reply: await fallbackReply(history[history.length - 1]?.content || '', history), usedTools: [] };
   }
 
-  const system = masterPrompt(operatorNotes);
+  let system = masterPrompt(operatorNotes);
+  if (clientContext?.trim()) {
+    system += `\n\nCONTEXTO DO CLIENTE (dados reais do CRM sobre quem está falando com você):\n${clientContext.trim()}`;
+  }
   const messages: Msg[] = [
     { role: 'system', content: system },
     ...history.slice(-MAX_HISTORY).map((m) => ({ role: m.role, content: m.content } as Msg)),

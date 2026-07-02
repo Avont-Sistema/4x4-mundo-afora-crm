@@ -10,7 +10,7 @@ import FileOrUrlInput from '@/components/FileOrUrlInput';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type StepType = 'text' | 'delay' | 'image' | 'audio' | 'video';
-type TriggerType = 'new_lead' | 'keyword' | 'manual';
+type TriggerType = 'new_lead' | 'keyword' | 'manual' | 'no_response';
 
 interface Step {
   order: number;
@@ -37,6 +37,7 @@ const TRIGGER_LABELS: Record<TriggerType, string> = {
   new_lead: 'Novo Lead',
   keyword: 'Palavra-chave',
   manual: 'Manual',
+  no_response: 'Sem resposta (follow-up)',
 };
 
 const STEP_ICONS: Record<StepType, React.ReactNode> = {
@@ -158,6 +159,7 @@ function FlowEditor({
                 <option value="new_lead">Novo Lead (automático)</option>
                 <option value="keyword">Palavra-chave</option>
                 <option value="manual">Manual</option>
+                <option value="no_response">Sem resposta (follow-up automático)</option>
               </select>
             </div>
           </div>
@@ -173,6 +175,29 @@ function FlowEditor({
                   setField('triggerData', { ...data.triggerData, keywords: e.target.value })
                 }
               />
+            </div>
+          )}
+
+          {data.trigger === 'no_response' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Disparar após quantas horas sem resposta?
+              </label>
+              <input
+                type="number"
+                min={1}
+                className="input w-full"
+                placeholder="24"
+                value={data.triggerData?.hours || ''}
+                onChange={(e) =>
+                  setField('triggerData', { ...data.triggerData, hours: e.target.value })
+                }
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Dispara quando o bot respondeu e o cliente ficou em silêncio por esse tempo
+                (conversas em atendimento humano ou finalizadas não recebem). Máximo 1x por
+                semana por contato.
+              </p>
             </div>
           )}
 

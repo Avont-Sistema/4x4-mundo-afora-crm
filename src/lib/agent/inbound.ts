@@ -1,8 +1,10 @@
-import { appendMessage, toClaudeHistory } from '@/lib/conversationsStore';
+import { appendMessage, toClaudeHistory, type Conversation } from '@/lib/conversationsStore';
 import { getSettings, isWithinBusinessHours } from '@/lib/settingsStore';
-import { findLeadByPhone, upsertLeadFromContact, updateLead } from '@/lib/leadsStore';
+import { findLeadByPhone, upsertLeadFromContact, updateLead, type Lead } from '@/lib/leadsStore';
 import { runAgent, aiEnabled } from './brain';
 import { getFlowsForTrigger, triggerFlow, wasFlowRecentlyTriggered } from '@/lib/flowsStore';
+import { clientsStore } from '@/lib/clientsStore';
+import { expeditionsStore } from '@/lib/expeditionsStore';
 
 export interface InboundResult {
   reply: string | null; // null = não responder automaticamente
@@ -18,6 +20,53 @@ function detectInterest(text: string): string | undefined {
   const m = text.toLowerCase();
   if (m.includes('lenç') || m.includes('lenc')) return 'Lençóis Maranhenses';
   return undefined;
+}
+
+// Monta um resumo do que o CRM já sabe sobre quem está falando — injetado no
+// system prompt para o bot não perguntar de novo o que já sabe e retomar contexto.
+async function buildClientContext(phone: string, lead: Lead | undefined, conv: Conversation): Promise<string> {
+  const parts: string[] = [];
+
+  parts.push(
+    `Data/hora atual: ${new Date().toLocaleString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      dateStyle: 'full',
+      timeStyle: 'short',
+    })}`
+  );
+
+  if (lead) {
+    let l = `É um lead registrado: ${lead.name} (estágio: ${lead.stage})`;
+    if (lead.interest) l += `, interesse: ${lead.interest}`;
+    parts.push(l);
+    if (lead.notes) parts.push(`Observações do lead: ${lead.notes}`);
+  }
+
+  try {
+    const digits = phone.split('@')[0].replace(/\D/g, '');
+    const client = (await clientsStore.all()).find(
+      (c) =>
+        (c.phone || '').replace(/\D/g, '') === digits ||
+        (c.whatsapp || '').replace(/\D/g, '') === digits
+    );
+    if (client) {
+      parts.push(`Já é CLIENTE cadastrado: ${client.name}`);
+      const enrolled = (await expeditionsStore.all()).filter((e) =>
+        (e.enrollments ?? []).some((en) => en.clientId === client.id && en.status !== 'cancelado')
+      );
+      if (enrolled.length > 0) {
+        parts.push(`Matriculado nas expedições: ${enrolled.map((e) => e.routeName).join(', ')}`);
+      }
+    }
+  } catch { /* contexto de cliente é opcional — não bloqueia a resposta */ }
+
+  if (conv.messages.length > 1) {
+    parts.push(
+      `Conversa iniciada em ${new Date(conv.createdAt).toLocaleDateString('pt-BR')} — ${conv.messages.length} mensagens até agora.`
+    );
+  }
+
+  return parts.join('\n');
 }
 
 export async function processInbound(
@@ -115,9 +164,10 @@ export async function processInbound(
     return { reply: msg, mode: conv.mode, leadCreated, aiEnabled: ai, typingDelay, reason: 'out_of_hours' };
   }
 
-  // 5. roda o agente
-  const history = toClaudeHistory(conv);
-  const { reply } = await runAgent(phone, history, settings.operatorNotes);
+  // 5. roda o agente (com histórico maior + contexto do CRM sobre o cliente)
+  const history = toClaudeHistory(conv, 30);
+  const clientContext = await buildClientContext(phone, up.lead ?? existingLead, conv);
+  const { reply } = await runAgent(phone, history, settings.operatorNotes, clientContext);
 
   await appendMessage(phone, { role: 'assistant', content: reply, via: 'bot' });
 

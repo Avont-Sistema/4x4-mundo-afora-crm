@@ -5,17 +5,21 @@ import {
   ArrowLeft, Send, Bot, PauseCircle, Wifi, WifiOff,
   AlertTriangle, RefreshCw, QrCode, Phone,
   Settings, X, Save, Trash2, Loader2, Upload, Link,
+  CheckCircle2, Users,
 } from 'lucide-react';
 import FlowsPage from '@/app/dashboard/flows/page';
 import toast from 'react-hot-toast';
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
+type ConvMode = 'bot' | 'human' | 'resolved';
+
 interface BotConv {
   phone: string;
   name: string | null;
   stage: string;
   botActive: boolean;
+  mode?: ConvMode;
   expeditionInterest: string | null;
   lastMessage: string;
   updatedAt: string;
@@ -93,6 +97,7 @@ function relativeTime(iso: string): string {
 export default function WhatsAppPage() {
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
   const [conversations, setConversations] = useState<BotConv[]>([]);
+  const [convTab, setConvTab] = useState<ConvMode>('bot');
   const [selected, setSelected] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
@@ -374,11 +379,36 @@ export default function WhatsAppPage() {
     } catch { toast.error('Bot offline'); }
   };
 
+  // Move a conversa entre as abas (Bot Ativo / Aguardando Equipe / Finalizadas)
+  const setConversationMode = async (phone: string, mode: ConvMode) => {
+    try {
+      await fetch(`/api/whatsapp/conversations/${encodeURIComponent(phone)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      toast.success(
+        mode === 'resolved' ? 'Conversa finalizada ✓'
+        : mode === 'human' ? 'Passada para a equipe'
+        : 'Bot reativado'
+      );
+      await loadConversations();
+    } catch { toast.error('Erro ao mover conversa'); }
+  };
+
   // ── Derivados ─────────────────────────────────────────────────────────────
+
+  const modeOf = (c: BotConv): ConvMode => c.mode ?? (c.botActive ? 'bot' : 'human');
+  const tabConversations = conversations.filter((c) => modeOf(c) === convTab);
+  const tabCounts = {
+    bot: conversations.filter((c) => modeOf(c) === 'bot').length,
+    human: conversations.filter((c) => modeOf(c) === 'human').length,
+    resolved: conversations.filter((c) => modeOf(c) === 'resolved').length,
+  };
 
   const selectedConv = conversations.find((c) => c.phone === selected);
   const alerts = conversations.filter(
-    (c) => c.waitingMinutes !== null && c.waitingMinutes >= 20 && c.botActive
+    (c) => c.waitingMinutes !== null && c.waitingMinutes >= 20 && c.botActive && modeOf(c) !== 'resolved'
   );
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -815,20 +845,45 @@ export default function WhatsAppPage() {
             w-full md:w-80 lg:w-96 shrink-0
           `}
         >
-          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              Conversas ({conversations.length})
-            </span>
+          {/* Abas: Bot Ativo / Aguardando Equipe / Finalizadas */}
+          <div className="flex border-b border-gray-200 shrink-0">
+            {([
+              ['bot', 'Bot Ativo', tabCounts.bot, 'text-green-700 border-green-500'],
+              ['human', 'Aguardando Equipe', tabCounts.human, 'text-orange-700 border-orange-500'],
+              ['resolved', 'Finalizadas', tabCounts.resolved, 'text-gray-600 border-gray-400'],
+            ] as [ConvMode, string, number, string][]).map(([key, label, count, activeCls]) => (
+              <button
+                key={key}
+                onClick={() => setConvTab(key)}
+                className={`flex-1 px-1 py-2.5 text-[11px] font-semibold border-b-2 transition-colors truncate
+                  ${convTab === key ? `${activeCls} bg-white` : 'text-gray-400 border-transparent hover:text-gray-600 hover:bg-gray-50'}`}
+              >
+                {label}
+                {count > 0 && (
+                  <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${
+                    convTab === key ? 'bg-gray-100' : 'bg-gray-100 text-gray-500'
+                  } ${key === 'human' && count > 0 ? 'bg-orange-100 text-orange-700' : ''}`}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {conversations.length === 0 ? (
+            {tabConversations.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40 text-gray-400 text-sm gap-2">
                 <Phone size={28} className="opacity-40" />
-                <span>{waStatus.offline ? 'Bot offline' : 'Nenhuma conversa ainda'}</span>
+                <span>
+                  {waStatus.offline && conversations.length === 0
+                    ? 'Bot offline'
+                    : convTab === 'bot' ? 'Nenhuma conversa com o bot'
+                    : convTab === 'human' ? 'Nenhuma conversa aguardando a equipe'
+                    : 'Nenhuma conversa finalizada'}
+                </span>
               </div>
             ) : (
-              conversations.map((conv) => (
+              tabConversations.map((conv) => (
                 <ConvItem
                   key={conv.phone}
                   conv={conv}
@@ -881,22 +936,48 @@ export default function WhatsAppPage() {
                 </div>
 
                 {selectedConv && (
-                  <button
-                    onClick={() => toggleBot(selected, selectedConv.botActive)}
-                    className={`
-                      flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full transition-colors
-                      ${selectedConv.botActive
-                        ? 'bg-green-100 text-green-700 hover:bg-red-100 hover:text-red-700'
-                        : 'bg-red-100 text-red-700 hover:bg-green-100 hover:text-green-700'
-                      }
-                    `}
-                    title={selectedConv.botActive ? 'Pausar bot (assumir conversa)' : 'Retomar bot'}
-                  >
-                    {selectedConv.botActive
-                      ? <><Bot size={13} /> Bot ativo</>
-                      : <><PauseCircle size={13} /> Pausado</>
-                    }
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {modeOf(selectedConv) === 'bot' && (
+                      <>
+                        <button
+                          onClick={() => setConversationMode(selected, 'human')}
+                          className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-full bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors"
+                          title="Pausar bot e passar para a equipe"
+                        >
+                          <Users size={13} /> <span className="hidden lg:inline">Passar p/ equipe</span>
+                        </button>
+                        <span className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-full bg-green-100 text-green-700">
+                          <Bot size={13} /> <span className="hidden lg:inline">Bot ativo</span>
+                        </span>
+                      </>
+                    )}
+                    {modeOf(selectedConv) === 'human' && (
+                      <button
+                        onClick={() => setConversationMode(selected, 'bot')}
+                        className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-full bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
+                        title="Devolver a conversa para o bot"
+                      >
+                        <Bot size={13} /> <span className="hidden lg:inline">Devolver ao bot</span>
+                      </button>
+                    )}
+                    {modeOf(selectedConv) !== 'resolved' ? (
+                      <button
+                        onClick={() => setConversationMode(selected, 'resolved')}
+                        className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                        title="Marcar conversa como finalizada"
+                      >
+                        <CheckCircle2 size={13} /> <span className="hidden lg:inline">Finalizar</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setConversationMode(selected, 'bot')}
+                        className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-full bg-yellow-100 text-yellow-800 hover:bg-yellow-200 transition-colors"
+                        title="Reabrir conversa (bot volta a responder)"
+                      >
+                        <RefreshCw size={13} /> <span className="hidden lg:inline">Reabrir</span>
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -973,9 +1054,12 @@ function ConvItem({
   const isWaiting = conv.waitingMinutes !== null && conv.waitingMinutes >= 20;
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
-      className={`w-full text-left flex items-start gap-3 px-4 py-3.5 border-b border-gray-50
+      onKeyDown={(e) => { if (e.key === 'Enter') onOpen(); }}
+      className={`w-full text-left flex items-start gap-3 px-4 py-3.5 border-b border-gray-50 cursor-pointer
         hover:bg-gray-50 active:bg-gray-100 transition-colors
         ${selected ? 'bg-yellow-50 border-l-2 border-l-yellow-400' : ''}
       `}
@@ -1035,7 +1119,7 @@ function ConvItem({
       >
         {conv.botActive ? <Bot size={16} /> : <PauseCircle size={16} />}
       </button>
-    </button>
+    </div>
   );
 }
 

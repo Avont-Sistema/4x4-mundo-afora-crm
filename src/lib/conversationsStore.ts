@@ -98,6 +98,35 @@ export async function setMode(phone: string, mode: ConvMode): Promise<Conversati
   return all[phone];
 }
 
+// Compara telefones ignorando sufixo de JID (@s.whatsapp.net/@lid) e formatação.
+function phoneKey(phone: string): string {
+  return phone.split('@')[0].replace(/\D/g, '');
+}
+
+// Busca a conversa por qualquer formato do telefone (JID completo, só dígitos…).
+export async function findConversationByAnyPhone(phone: string): Promise<Conversation | undefined> {
+  const all = await load();
+  if (all[phone]) return all[phone];
+  const key = phoneKey(phone);
+  if (!key) return undefined;
+  return Object.values(all).find((c) => phoneKey(c.phone) === key);
+}
+
+// Define o modo aceitando qualquer formato de telefone; cria a conversa se não
+// existir (ex.: conversa que só vive na memória do bot e a equipe quer finalizar).
+export async function setModeByAnyPhone(
+  phone: string,
+  mode: ConvMode,
+  contactName?: string
+): Promise<Conversation> {
+  const existing = await findConversationByAnyPhone(phone);
+  const conv = existing ?? (await ensure(phone, contactName));
+  conv.mode = mode;
+  conv.updatedAt = new Date().toISOString();
+  await persist();
+  return conv;
+}
+
 export async function clearConversation(phone: string): Promise<void> {
   const all = await load();
   if (all[phone]) {

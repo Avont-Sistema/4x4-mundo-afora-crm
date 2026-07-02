@@ -10,6 +10,14 @@ import {
 export async function GET(req: NextRequest) {
   if (!isBotAuthed(req)) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
+  // Carona no poll do bot (30s): checa follow-ups "sem resposta" (throttle interno de 10min)
+  try {
+    const { checkNoResponseFollowups } = await import('@/lib/followups');
+    await checkNoResponseFollowups();
+  } catch (e) {
+    console.error('[followup] erro na checagem:', (e as Error).message);
+  }
+
   const [flowMessages, broadcastMessages] = await Promise.all([
     getPendingMessages(),
     getPendingBroadcastMessages(),

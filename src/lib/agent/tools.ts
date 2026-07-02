@@ -157,6 +157,18 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+
+// URL pública do CRM — usada para montar o link de formulário exclusivo de cada
+// expedição (o MESMO link do botão "Link de Formulário" na tela da expedição).
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL ??
+  process.env.NEXTAUTH_URL ??
+  'https://4x4-mundo-afora-crm-iota.vercel.app';
+
+export function expeditionFormUrl(expeditionId: string): string {
+  return `${APP_URL}/cadastro?exp=${expeditionId}`;
+}
+
 async function findExpeditionByName(nome: string): Promise<Expedition | undefined> {
   const q = (nome || '').toLowerCase();
   const all = await expeditionsStore.all();
@@ -198,6 +210,7 @@ export async function executeTool(
             vagas_disponiveis: d.finance.slotsAvailable,
             preco_adulto: e.pricePerPerson,
             preco_crianca: e.pricePerChild,
+            link_formulario: expeditionFormUrl(e.id),
           };
         })
       );
@@ -218,6 +231,7 @@ export async function executeTool(
         vagas_disponiveis: d.finance.slotsAvailable,
         preco_adulto: exp.pricePerPerson,
         preco_crianca: exp.pricePerChild,
+        link_formulario: expeditionFormUrl(exp.id),
       };
     }
 

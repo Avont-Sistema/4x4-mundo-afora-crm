@@ -1,7 +1,9 @@
 import { kvLoad, kvSave } from './kvStore';
 
 export type StepType = 'text' | 'delay' | 'image' | 'audio' | 'video';
-export type TriggerType = 'new_lead' | 'keyword' | 'manual';
+// no_response: follow-up automático — dispara quando o bot respondeu e o cliente
+// ficou em silêncio por triggerData.hours horas (padrão 24). Ver lib/followups.ts.
+export type TriggerType = 'new_lead' | 'keyword' | 'manual' | 'no_response';
 
 export interface FlowStep {
   id: string;
