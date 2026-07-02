@@ -419,6 +419,28 @@ app.get('/api/qr', auth, (req, res) => {
   res.json({ connected: isConnected, qr: currentQrData });
 });
 
+// Foto de perfil do contato (cache 6h — evita rate limit do WhatsApp)
+const avatarCache = new Map(); // jid -> { url|null, at }
+app.get('/api/avatar/:phone', auth, async (req, res) => {
+  if (!isConnected || !sock) return res.status(503).json({ url: null });
+  const phone = decodeURIComponent(req.params.phone);
+  const jid = phone.includes('@') ? phone : `${phone}@s.whatsapp.net`;
+
+  const cached = avatarCache.get(jid);
+  if (cached && Date.now() - cached.at < 6 * 60 * 60 * 1000) {
+    return res.json({ url: cached.url });
+  }
+
+  try {
+    const url = await sock.profilePictureUrl(resolveSendJid(jid), 'image').catch(() => null);
+    avatarCache.set(jid, { url: url || null, at: Date.now() });
+    res.json({ url: url || null });
+  } catch {
+    avatarCache.set(jid, { url: null, at: Date.now() });
+    res.json({ url: null });
+  }
+});
+
 app.get('/api/conversations', auth, (req, res) => {
   const list = Array.from(conversations.values())
     .map(({ history: _h, ...c }) => c)

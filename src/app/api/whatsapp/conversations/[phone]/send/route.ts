@@ -8,14 +8,14 @@ export async function POST(
 ) {
   const { phone: phoneRaw } = await params;
   const phone = decodeURIComponent(phoneRaw);
-  const { text } = await request.json();
-  if (!text?.trim()) {
-    return NextResponse.json({ error: 'text obrigatório' }, { status: 400 });
+  const { text, mediaUrl, mediaType } = await request.json();
+  if (!text?.trim() && !mediaUrl) {
+    return NextResponse.json({ error: 'text ou mediaUrl obrigatório' }, { status: 400 });
   }
   try {
     const res = await botFetch('/api/send', {
       method: 'POST',
-      body: JSON.stringify({ phone, text }),
+      body: JSON.stringify({ phone, text, mediaUrl, mediaType }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -26,7 +26,10 @@ export async function POST(
     // e move a conversa para "Aguardando Equipe" — operador respondeu, bot pausa.
     const existing = await findConversationByAnyPhone(phone);
     const convPhone = existing?.phone ?? phone;
-    await appendMessage(convPhone, { role: 'assistant', content: `[Operador] ${text}`, via: 'human' });
+    const logged = text?.trim()
+      ? `[Operador] ${text}`
+      : `[Operador] [${mediaType === 'image' ? 'imagem' : mediaType === 'video' ? 'vídeo' : mediaType === 'audio' ? 'áudio' : 'arquivo'}] ${mediaUrl}`;
+    await appendMessage(convPhone, { role: 'assistant', content: logged, via: 'human' });
     if (!existing || existing.mode === 'bot') {
       await setModeByAnyPhone(convPhone, 'human');
       try {

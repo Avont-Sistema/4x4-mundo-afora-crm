@@ -145,6 +145,19 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'consultar_contexto',
+      description:
+        'Busca na base de conhecimento da empresa as informações oficiais sobre um assunto (roteiros, condições, links externos, regras específicas). Use quando o cliente perguntar sobre um tema que aparece na lista de CONTEXTOS DISPONÍVEIS.',
+      parameters: {
+        type: 'object',
+        properties: { assunto: { type: 'string', description: 'Tema ou palavra-chave (ex: Serra Gaúcha)' } },
+        required: ['assunto'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'escalar_humano',
       description:
         'Transfere a conversa para um atendente humano. Use APENAS em reclamações graves ou quando absolutamente não souber responder E as instruções do operador não cobrirem o caso. Se as instruções do operador já dizem o que fazer (ex: dar um número de telefone, explicar uma regra), siga as instruções e NÃO use esta ferramenta.',
@@ -376,6 +389,22 @@ export async function executeTool(
       const q = (input.pergunta || '').toLowerCase();
       const found = negocio.faq.find((f) => q.includes(f.pergunta));
       return found || { mensagem: 'Não tenho essa resposta exata, posso verificar com a equipe.' };
+    }
+
+    case 'consultar_contexto': {
+      const { searchKnowledge } = await import('@/lib/knowledgeStore');
+      const found = await searchKnowledge(input.assunto || '');
+      if (found.length === 0) {
+        return { encontrado: false, mensagem: 'Nenhum contexto cadastrado sobre esse assunto.' };
+      }
+      return {
+        encontrado: true,
+        contextos: found.map((e) => ({
+          assunto: e.topic,
+          informacoes: e.content,
+          links: e.links ?? [],
+        })),
+      };
     }
 
     case 'escalar_humano': {

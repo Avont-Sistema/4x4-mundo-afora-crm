@@ -103,12 +103,18 @@ export default function WhatsAppPage() {
   const [text, setText] = useState('');
   const [waStatus, setWaStatus] = useState<WaStatus>({ connected: false, qr: false });
   const [sending, setSending] = useState(false);
+  const [stats, setStats] = useState<{
+    conversasAtivasHoje: number; msgsHoje: number; respostasBotHoje: number;
+    respostasEquipeHoje: number; leadsHoje: number; aguardandoEquipe: number;
+  } | null>(null);
+  const [attaching, setAttaching] = useState(false);
+  const attachRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // ── Config panel ──────────────────────────────────────────────────────────
   const [configOpen, setConfigOpen]         = useState(false);
-  const [configTab, setConfigTab]           = useState<'connection' | 'rules' | 'training' | 'flows'>('training');
+  const [configTab, setConfigTab]           = useState<'connection' | 'rules' | 'training' | 'flows' | 'contexts'>('training');
   const [settings, setSettings]             = useState<BotSettings>(DEFAULT_SETTINGS);
   const [savingSettings, setSavingSettings] = useState(false);
   const [qrData, setQrData]                 = useState<{ connected: boolean; qr: string | null; offline?: boolean } | null>(null);
@@ -274,6 +280,13 @@ export default function WhatsAppPage() {
     } catch { setWaStatus({ connected: false, qr: false, offline: true }); }
   }, []);
 
+  const loadStats = useCallback(async () => {
+    try {
+      const res = await fetch('/api/whatsapp/stats');
+      if (res.ok) setStats(await res.json());
+    } catch { /* ignore */ }
+  }, []);
+
   const loadThread = useCallback(async (phone: string) => {
     try {
       const res = await fetch(`/api/whatsapp/conversations/${encodeURIComponent(phone)}`);
@@ -305,9 +318,12 @@ export default function WhatsAppPage() {
   useEffect(() => {
     loadConversations();
     loadStatus();
+    loadStats();
     const si = setInterval(loadStatus, 20000);
-    return () => clearInterval(si);
-  }, [loadConversations, loadStatus]);
+    const ci = setInterval(loadConversations, 8000); // tempo real: lista sempre fresca
+    const sti = setInterval(loadStats, 60000);
+    return () => { clearInterval(si); clearInterval(ci); clearInterval(sti); };
+  }, [loadConversations, loadStatus, loadStats]);
 
   useEffect(() => {
     if (!configOpen) return;
@@ -366,6 +382,54 @@ export default function WhatsAppPage() {
     }
   };
 
+  // Envia arquivo de mídia (imagem/vídeo/áudio/documento) na conversa aberta
+  const sendMedia = async (file: File) => {
+    if (!selected || attaching) return;
+    setAttaching(true);
+    try {
+      const mediaType = file.type.startsWith('image/') ? 'image'
+        : file.type.startsWith('video/') ? 'video'
+        : file.type.startsWith('audio/') ? 'audio'
+        : 'document';
+
+      let url: string;
+      const isLarge = file.type.startsWith('video/') || file.size > 4 * 1024 * 1024;
+      if (isLarge) {
+        const { upload } = await import('@vercel/blob/client');
+        const filename = `chat/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const blob = await upload(filename, file, { access: 'public', handleUploadUrl: '/api/upload' });
+        url = blob.url;
+      } else {
+        const form = new FormData();
+        form.append('file', file);
+        form.append('folder', 'chat');
+        const res = await fetch('/api/upload', { method: 'POST', body: form });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Falha no upload');
+        url = data.url;
+      }
+
+      const caption = text.trim();
+      const res = await fetch(`/api/whatsapp/conversations/${encodeURIComponent(selected)}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: caption, mediaUrl: url, mediaType }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Falha ao enviar mídia');
+      }
+      setText('');
+      toast.success('Mídia enviada!');
+      await loadThread(selected);
+      await loadConversations();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setAttaching(false);
+    }
+  };
+
   const toggleBot = async (phone: string, botActive: boolean) => {
     try {
       await fetch(`/api/whatsapp/conversations/${encodeURIComponent(phone)}`, {
@@ -420,43 +484,67 @@ export default function WhatsAppPage() {
       style={{ height: 'calc(100dvh - 57px)' }}
     >
 
-      {/* ── Status bar ────────────────────────────────────────────────────── */}
-      <div className="bg-gray-900 text-white flex items-center gap-3 px-4 py-2 shrink-0">
-        <span className="font-semibold text-sm text-yellow-400">WhatsApp IA</span>
+      {/* ── Status bar (estilo WhatsApp) ──────────────────────────────────── */}
+      <div className="bg-[#008069] text-white flex items-center gap-3 px-4 py-2.5 shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <div className="w-8 h-8 bg-white/15 rounded-full flex items-center justify-center">
+              <Phone size={15} className="text-white" />
+            </div>
+            {waStatus.connected && (
+              <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-300 opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-400 border border-white" />
+              </span>
+            )}
+          </div>
+          <div className="leading-tight">
+            <span className="font-semibold text-sm block">WhatsApp — 4x4 Mundo Afora</span>
+            <span className="text-[10px] text-white/70">
+              {waStatus.offline ? 'bot offline' : waStatus.connected ? 'online • bot respondendo' : waStatus.qr ? 'aguardando QR' : 'desconectado'}
+            </span>
+          </div>
+        </div>
+
+        {/* Estatísticas do dia */}
+        {stats && (
+          <div className="hidden md:flex items-center gap-4 ml-6 text-[11px] text-white/90">
+            <span title="Conversas com atividade hoje">💬 <b>{stats.conversasAtivasHoje}</b> hoje</span>
+            <span title="Respostas do bot hoje">🤖 <b>{stats.respostasBotHoje}</b> bot</span>
+            <span title="Respostas da equipe hoje">👤 <b>{stats.respostasEquipeHoje}</b> equipe</span>
+            <span title="Leads criados hoje via WhatsApp">✨ <b>{stats.leadsHoje}</b> leads</span>
+            {stats.aguardandoEquipe > 0 && (
+              <span className="bg-orange-500/90 px-2 py-0.5 rounded-full font-semibold" title="Conversas aguardando a equipe">
+                {stats.aguardandoEquipe} aguardando
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="flex-1" />
-        {waStatus.offline ? (
-          <span className="flex items-center gap-1 text-red-400 text-xs">
-            <WifiOff size={13} /> Bot offline
-          </span>
-        ) : waStatus.connected ? (
-          <span className="flex items-center gap-1 text-green-400 text-xs">
-            <Wifi size={13} /> Conectado
-          </span>
-        ) : waStatus.qr ? (
-          <a
-            href="/dashboard/whatsapp/qr"
-            className="flex items-center gap-1 text-yellow-400 text-xs hover:underline"
-          >
+        {!waStatus.connected && !waStatus.offline && waStatus.qr && (
+          <a href="/dashboard/whatsapp/qr" className="flex items-center gap-1 text-yellow-300 text-xs hover:underline">
             <QrCode size={13} /> Escanear QR
           </a>
-        ) : (
-          <span className="flex items-center gap-1 text-gray-400 text-xs">
-            <WifiOff size={13} /> Desconectado
+        )}
+        {waStatus.offline && (
+          <span className="flex items-center gap-1 text-red-300 text-xs">
+            <WifiOff size={13} /> Bot offline
           </span>
         )}
         <button
-          onClick={() => { loadConversations(); loadStatus(); }}
-          className="p-1 hover:bg-gray-700 rounded text-gray-400"
+          onClick={() => { loadConversations(); loadStatus(); loadStats(); }}
+          className="p-1.5 hover:bg-white/10 rounded-full text-white/80"
           title="Atualizar"
         >
-          <RefreshCw size={14} />
+          <RefreshCw size={15} />
         </button>
         <button
           onClick={() => setConfigOpen(true)}
-          className="p-1 hover:bg-gray-700 rounded text-gray-400"
+          className="p-1.5 hover:bg-white/10 rounded-full text-white/80"
           title="Configurações"
         >
-          <Settings size={14} />
+          <Settings size={15} />
         </button>
       </div>
 
@@ -482,6 +570,7 @@ export default function WhatsAppPage() {
                 ['connection', '📶', 'Conexão WhatsApp'],
                 ['rules', '⚙️', 'Regras & Config'],
                 ['training', '🤖', 'Treinar o Bot'],
+                ['contexts', '📚', 'Contextos'],
                 ['flows', '🔀', 'Fluxos de Mensagens'],
               ] as const).map(([k, icon, label]) => (
                 <button
@@ -797,6 +886,13 @@ export default function WhatsAppPage() {
               </div>
             )}
 
+            {/* ── Aba: Contextos (base de conhecimento) ──────────────────── */}
+            {configTab === 'contexts' && (
+              <div className="flex-1 overflow-y-auto p-8">
+                <KnowledgePanel />
+              </div>
+            )}
+
             {/* ── Aba: Fluxos de Mensagens ────────────────────────────────── */}
             {configTab === 'flows' && (
               <div className="flex-1 overflow-y-auto">
@@ -848,8 +944,8 @@ export default function WhatsAppPage() {
           {/* Abas: Bot Ativo / Aguardando Equipe / Finalizadas */}
           <div className="flex border-b border-gray-200 shrink-0">
             {([
-              ['bot', 'Bot Ativo', tabCounts.bot, 'text-green-700 border-green-500'],
-              ['human', 'Aguardando Equipe', tabCounts.human, 'text-orange-700 border-orange-500'],
+              ['bot', 'Bot Ativo', tabCounts.bot, 'text-[#008069] border-[#008069]'],
+              ['human', 'Aguardando Equipe', tabCounts.human, 'text-orange-600 border-orange-500'],
               ['resolved', 'Finalizadas', tabCounts.resolved, 'text-gray-600 border-gray-400'],
             ] as [ConvMode, string, number, string][]).map(([key, label, count, activeCls]) => (
               <button
@@ -911,13 +1007,15 @@ export default function WhatsAppPage() {
           ) : (
             <>
               {/* Thread header */}
-              <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 shrink-0">
+              <div className="bg-[#f0f2f5] border-b border-gray-200 px-4 py-2.5 flex items-center gap-3 shrink-0">
                 <button
                   onClick={() => setMobileView('list')}
                   className="md:hidden p-1 -ml-1 text-gray-500 hover:text-gray-800 rounded"
                 >
                   <ArrowLeft size={20} />
                 </button>
+
+                <Avatar phone={selected} name={selectedConv?.name} size={40} />
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -981,8 +1079,15 @@ export default function WhatsAppPage() {
                 )}
               </div>
 
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2 bg-gray-50">
+              {/* Messages — papel de parede estilo WhatsApp */}
+              <div
+                className="flex-1 overflow-y-auto px-4 py-4 space-y-1.5 bg-[#efeae2]"
+                style={{
+                  backgroundImage:
+                    'radial-gradient(circle at 1px 1px, rgba(0,0,0,0.035) 1px, transparent 0)',
+                  backgroundSize: '18px 18px',
+                }}
+              >
                 {messages.length === 0 ? (
                   <div className="text-center text-gray-400 text-sm mt-8">Sem histórico</div>
                 ) : (
@@ -994,13 +1099,32 @@ export default function WhatsAppPage() {
               </div>
 
               {/* Input */}
-              <div className="bg-white border-t border-gray-200 p-3 flex items-end gap-2 shrink-0">
+              <div className="bg-[#f0f2f5] border-t border-gray-200 p-2.5 flex items-end gap-2 shrink-0">
+                <input
+                  ref={attachRef}
+                  type="file"
+                  accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) sendMedia(f);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  onClick={() => attachRef.current?.click()}
+                  disabled={attaching}
+                  className="p-2.5 text-gray-500 hover:text-[#008069] hover:bg-gray-200 rounded-full transition-colors disabled:opacity-40 shrink-0"
+                  title="Anexar mídia (foto, vídeo, áudio, documento) — o texto digitado vira legenda"
+                >
+                  {attaching ? <Loader2 size={20} className="animate-spin" /> : <Upload size={20} />}
+                </button>
                 <textarea
                   ref={inputRef}
                   rows={1}
-                  className="flex-1 resize-none rounded-2xl border border-gray-300 px-4 py-2.5 text-sm
-                    focus:outline-none focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400
-                    placeholder:text-gray-400 max-h-32 overflow-y-auto"
+                  className="flex-1 resize-none rounded-lg border-0 bg-white px-4 py-2.5 text-sm
+                    focus:outline-none focus:ring-1 focus:ring-[#00a884]
+                    placeholder:text-gray-400 max-h-32 overflow-y-auto shadow-sm"
                   placeholder={
                     selectedConv?.botActive
                       ? 'Responder como operador (pausa o bot)…'
@@ -1024,8 +1148,8 @@ export default function WhatsAppPage() {
                 <button
                   onClick={sendMessage}
                   disabled={!text.trim() || sending}
-                  className="bg-yellow-400 hover:bg-yellow-500 disabled:opacity-40 disabled:cursor-not-allowed
-                    text-black rounded-full w-10 h-10 flex items-center justify-center shrink-0 transition-colors"
+                  className="bg-[#00a884] hover:bg-[#008069] disabled:opacity-40 disabled:cursor-not-allowed
+                    text-white rounded-full w-10 h-10 flex items-center justify-center shrink-0 transition-colors"
                 >
                   <Send size={18} />
                 </button>
@@ -1034,6 +1158,190 @@ export default function WhatsAppPage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Componente: Contextos (base de conhecimento do bot) ───────────────────────
+
+interface KnowledgeEntry {
+  id: string;
+  topic: string;
+  keywords: string;
+  content: string;
+  links?: string[];
+}
+
+function KnowledgePanel() {
+  const [entries, setEntries] = useState<KnowledgeEntry[]>([]);
+  const [editing, setEditing] = useState<Partial<KnowledgeEntry> | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    const res = await fetch('/api/knowledge');
+    if (res.ok) setEntries((await res.json()).entries ?? []);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async () => {
+    if (!editing?.topic?.trim() || !editing?.content?.trim()) {
+      toast.error('Assunto e informações são obrigatórios');
+      return;
+    }
+    setSaving(true);
+    try {
+      const links = (editing.links ?? []).filter(Boolean);
+      const body = JSON.stringify({ ...editing, links });
+      const res = editing.id
+        ? await fetch(`/api/knowledge/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body })
+        : await fetch('/api/knowledge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+      if (!res.ok) throw new Error((await res.json()).error || 'Erro ao salvar');
+      toast.success('Contexto salvo!');
+      setEditing(null);
+      await load();
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
+  const remove = async (id: string) => {
+    if (!confirm('Excluir este contexto?')) return;
+    await fetch(`/api/knowledge/${id}`, { method: 'DELETE' });
+    await load();
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-800">📚 Contextos — Base de Conhecimento</h2>
+          <p className="text-xs text-gray-500 mt-1">
+            Cadastre assuntos com as informações oficiais (roteiros, condições, links externos).
+            Quando a conversa tocar nas palavras-chave, o bot usa esse conteúdo como fonte.
+          </p>
+        </div>
+        <button
+          onClick={() => setEditing({ topic: '', keywords: '', content: '', links: [] })}
+          className="bg-[#00a884] hover:bg-[#008069] text-white text-sm font-semibold px-4 py-2 rounded-lg shrink-0"
+        >
+          + Novo contexto
+        </button>
+      </div>
+
+      {editing && (
+        <div className="border border-[#00a884]/40 bg-[#f0faf7] rounded-xl p-5 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Assunto *</label>
+              <input className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#00a884]"
+                placeholder="Ex: Serra Gaúcha"
+                value={editing.topic ?? ''}
+                onChange={(e) => setEditing((s) => ({ ...s, topic: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Palavras-chave (vírgula)</label>
+              <input className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#00a884]"
+                placeholder="serra gaucha, serra gaúcha, canyons"
+                value={editing.keywords ?? ''}
+                onChange={(e) => setEditing((s) => ({ ...s, keywords: e.target.value }))} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Informações oficiais *</label>
+            <textarea rows={6} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white resize-none focus:outline-none focus:border-[#00a884]"
+              placeholder={'Roteiro, o que está incluso, condições, valores especiais, regras…\nO bot vai responder com base neste texto.'}
+              value={editing.content ?? ''}
+              onChange={(e) => setEditing((s) => ({ ...s, content: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Links externos (um por linha — página de vendas, vídeo, formulário…)</label>
+            <textarea rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white resize-none focus:outline-none focus:border-[#00a884] font-mono"
+              placeholder="https://..."
+              value={(editing.links ?? []).join('\n')}
+              onChange={(e) => setEditing((s) => ({ ...s, links: e.target.value.split('\n').map((l) => l.trim()) }))} />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => setEditing(null)} className="text-sm text-gray-500 px-4 py-2 hover:bg-gray-100 rounded-lg">Cancelar</button>
+            <button onClick={save} disabled={saving}
+              className="bg-[#00a884] hover:bg-[#008069] disabled:opacity-50 text-white text-sm font-semibold px-5 py-2 rounded-lg flex items-center gap-2">
+              {saving && <Loader2 size={14} className="animate-spin" />} Salvar contexto
+            </button>
+          </div>
+        </div>
+      )}
+
+      {entries.length === 0 && !editing ? (
+        <div className="text-center py-10 text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-xl">
+          Nenhum contexto cadastrado ainda.<br />
+          Ex: crie &quot;Serra Gaúcha&quot; com o roteiro completo e os links da expedição.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {entries.map((e) => (
+            <div key={e.id} className="border border-gray-200 rounded-xl p-4 bg-white hover:border-[#00a884]/50 transition-colors">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-800 text-sm">{e.topic}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">🔑 {e.keywords}</p>
+                  <p className="text-xs text-gray-600 mt-1.5 line-clamp-2 whitespace-pre-wrap">{e.content}</p>
+                  {(e.links ?? []).length > 0 && (
+                    <p className="text-[11px] text-blue-600 mt-1 truncate">🔗 {(e.links ?? []).join('  ')}</p>
+                  )}
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <button onClick={() => setEditing(e)} className="text-xs text-gray-500 hover:text-[#008069] px-2 py-1 hover:bg-gray-50 rounded">Editar</button>
+                  <button onClick={() => remove(e.id)} className="text-xs text-gray-400 hover:text-red-600 px-2 py-1 hover:bg-red-50 rounded">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Componente: avatar com foto de perfil do WhatsApp ─────────────────────────
+
+const avatarUrlCache = new Map<string, string | null>();
+
+function Avatar({ phone, name, size = 40, waiting = false }: {
+  phone: string; name?: string | null; size?: number; waiting?: boolean;
+}) {
+  const [url, setUrl] = useState<string | null | undefined>(avatarUrlCache.get(phone));
+
+  useEffect(() => {
+    if (avatarUrlCache.has(phone)) { setUrl(avatarUrlCache.get(phone)); return; }
+    let alive = true;
+    fetch(`/api/whatsapp/avatar/${encodeURIComponent(phone)}`)
+      .then((r) => r.json())
+      .then((d) => { avatarUrlCache.set(phone, d.url ?? null); if (alive) setUrl(d.url ?? null); })
+      .catch(() => { avatarUrlCache.set(phone, null); if (alive) setUrl(null); });
+    return () => { alive = false; };
+  }, [phone]);
+
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt={name || phone}
+        width={size}
+        height={size}
+        className="rounded-full object-cover shrink-0"
+        style={{ width: size, height: size }}
+        onError={() => { avatarUrlCache.set(phone, null); setUrl(null); }}
+      />
+    );
+  }
+  return (
+    <div
+      className={`rounded-full flex items-center justify-center font-bold shrink-0
+        ${waiting ? 'bg-red-100 text-red-600' : 'bg-[#dfe5e7] text-gray-500'}`}
+      style={{ width: size, height: size, fontSize: size * 0.4 }}
+    >
+      {(name || phone).replace(/[^a-zA-ZÀ-ú0-9]/g, '').slice(0, 1).toUpperCase() || '?'}
     </div>
   );
 }
@@ -1064,12 +1372,9 @@ function ConvItem({
         ${selected ? 'bg-yellow-50 border-l-2 border-l-yellow-400' : ''}
       `}
     >
-      {/* Avatar */}
-      <div className={`
-        w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 mt-0.5
-        ${isWaiting ? 'bg-red-100 text-red-600' : 'bg-gray-200 text-gray-600'}
-      `}>
-        {(conv.name || conv.phone).slice(0, 1).toUpperCase()}
+      {/* Avatar com foto de perfil */}
+      <div className="mt-0.5">
+        <Avatar phone={conv.phone} name={conv.name} size={44} waiting={isWaiting} />
       </div>
 
       <div className="flex-1 min-w-0">
@@ -1135,23 +1440,41 @@ function ChatBubble({ message }: { message: Message }) {
     ? message.content.replace('[Operador] ', '')
     : message.content;
 
+  // Detecta URL de mídia enviada pelo operador para renderizar preview
+  const mediaMatch = content.match(/^\[(imagem|vídeo|áudio|arquivo)\]\s+(https?:\/\/\S+)/);
+
   return (
     <div className={`flex ${isUser ? 'justify-start' : 'justify-end'}`}>
       <div
         className={`
-          max-w-[78%] px-3.5 py-2 rounded-2xl text-sm leading-relaxed
+          max-w-[78%] px-3 py-1.5 rounded-lg text-sm leading-relaxed shadow-sm
           ${isUser
-            ? 'bg-white text-gray-900 rounded-tl-sm shadow-sm border border-gray-100'
-            : isOperator
-            ? 'bg-orange-500 text-white rounded-tr-sm'
-            : 'bg-yellow-400 text-gray-900 rounded-tr-sm'
+            ? 'bg-white text-gray-900 rounded-tl-none'
+            : 'bg-[#d9fdd3] text-gray-900 rounded-tr-none'
           }
         `}
       >
         {isOperator && (
-          <p className="text-[9px] opacity-75 mb-0.5 font-semibold uppercase tracking-wide">Equipe</p>
+          <p className="text-[9px] text-[#008069] mb-0.5 font-semibold uppercase tracking-wide">Equipe</p>
         )}
-        <p className="whitespace-pre-wrap break-words">{content}</p>
+        {!isUser && !isOperator && (
+          <p className="text-[9px] text-gray-400 mb-0.5 font-semibold uppercase tracking-wide">🤖 Bot</p>
+        )}
+        {mediaMatch ? (
+          mediaMatch[1] === 'imagem' ? (
+            <img src={mediaMatch[2]} alt="imagem" className="max-w-[240px] max-h-[240px] rounded-md" />
+          ) : mediaMatch[1] === 'áudio' ? (
+            <audio controls src={mediaMatch[2]} className="max-w-[240px]" />
+          ) : mediaMatch[1] === 'vídeo' ? (
+            <video controls src={mediaMatch[2]} className="max-w-[240px] rounded-md" />
+          ) : (
+            <a href={mediaMatch[2]} target="_blank" rel="noreferrer" className="text-blue-600 underline text-xs">
+              📎 arquivo
+            </a>
+          )
+        ) : (
+          <p className="whitespace-pre-wrap break-words">{content}</p>
+        )}
       </div>
     </div>
   );

@@ -66,6 +66,23 @@ async function buildClientContext(phone: string, lead: Lead | undefined, conv: C
     );
   }
 
+  // Base de conhecimento: lista os assuntos cadastrados e injeta na íntegra os
+  // que casam com a mensagem atual (a tool consultar_contexto busca os demais).
+  try {
+    const { listKnowledge, topicsMatching } = await import('@/lib/knowledgeStore');
+    const all = await listKnowledge();
+    if (all.length > 0) {
+      parts.push(`CONTEXTOS DISPONÍVEIS (use consultar_contexto): ${all.map((e) => e.topic).join(', ')}`);
+      const lastUserMsg = [...conv.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+      const matched = await topicsMatching(lastUserMsg);
+      for (const e of matched.slice(0, 2)) {
+        parts.push(`\nCONTEXTO "${e.topic}" (informação oficial — use como fonte):\n${e.content}${
+          e.links?.length ? `\nLinks: ${e.links.join(' ')}` : ''
+        }`);
+      }
+    }
+  } catch { /* base de conhecimento é opcional */ }
+
   return parts.join('\n');
 }
 
@@ -78,7 +95,14 @@ export async function processInbound(
   const settings = await getSettings();
 
   // 1. registra a mensagem recebida
-  const conv = await appendMessage(phone, { role: 'user', content: text }, contactName);
+  let conv = await appendMessage(phone, { role: 'user', content: text }, contactName);
+
+  // 1a. conversa finalizada + cliente mandou mensagem => reabre para o bot
+  // (senão a conversa ficaria muda para sempre depois de "Finalizar")
+  if (conv.mode === 'resolved') {
+    const { setMode } = await import('@/lib/conversationsStore');
+    conv = (await setMode(phone, 'bot')) ?? conv;
+  }
 
   // 1b. auto-correção: leads antigos foram salvos com o LID (ID interno do WhatsApp)
   // no lugar do telefone. Se o bot mandou o LID junto e existe um lead com esse LID

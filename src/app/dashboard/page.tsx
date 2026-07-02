@@ -227,6 +227,39 @@ export default function Dashboard() {
         </button>
       </div>
 
+      {/* Atalho flutuante: WhatsApp ao vivo */}
+      <Link
+        href="/dashboard/whatsapp"
+        title="Abrir WhatsApp IA — atendimento ao vivo"
+        className="fixed bottom-6 right-6 z-40 group"
+      >
+        <div className="relative">
+          <div className="w-16 h-16 rounded-full bg-[#25D366] hover:bg-[#1fb959] shadow-lg shadow-green-500/30
+            flex items-center justify-center transition-transform group-hover:scale-105">
+            {/* Balão de conversa com telefone (glifo próprio) */}
+            <svg viewBox="0 0 32 32" width="34" height="34" fill="none">
+              <path
+                d="M16 4C9.4 4 4 9.1 4 15.4c0 2.5.9 4.9 2.4 6.9L5 27.5l5.4-1.6c1.7.9 3.6 1.4 5.6 1.4 6.6 0 12-5.1 12-11.4S22.6 4 16 4z"
+                fill="white"
+              />
+              <path
+                d="M12.6 10.9c-.3-.6-.6-.6-.9-.6h-.7c-.3 0-.7.1-1 .5-.3.4-1.2 1.2-1.2 3s1.3 3.5 1.4 3.7c.2.2 2.4 3.9 6 5.3 3 1.2 3.6 1 4.2.9.7-.1 2.1-.9 2.4-1.7.3-.8.3-1.6.2-1.7-.1-.1-.3-.2-.7-.4l-2.4-1.2c-.3-.1-.6-.2-.8.2l-1.1 1.4c-.2.2-.4.3-.7.1-.4-.2-1.5-.6-2.9-1.8-1.1-1-1.8-2.2-2-2.5-.2-.4 0-.5.2-.7l.5-.6c.2-.2.2-.4.4-.6.1-.2.1-.5 0-.7l-.9-2.6z"
+                fill="#25D366"
+              />
+            </svg>
+          </div>
+          {/* Bolinha "ao vivo" pulsando */}
+          <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 border-2 border-white" />
+          </span>
+          <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-gray-900 text-white text-xs
+            font-medium px-3 py-1.5 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+            WhatsApp • ao vivo
+          </span>
+        </div>
+      </Link>
+
       {/* KPIs */}
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <KPICard
