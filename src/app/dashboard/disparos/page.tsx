@@ -6,6 +6,7 @@ import {
   XCircle, Clock, AlertCircle, ChevronDown, ChevronUp,
   MessageSquare, Image, Mic, RefreshCw, Eye,
 } from 'lucide-react';
+import FileOrUrlInput from '@/components/FileOrUrlInput';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -614,12 +615,11 @@ export default function DisparosPage() {
                   ))}
                 </div>
                 {form.mediaType && (
-                  <input
-                    type="url"
+                  <FileOrUrlInput
+                    type={form.mediaType}
                     value={form.mediaUrl}
-                    onChange={(e) => setForm((f) => ({ ...f, mediaUrl: e.target.value }))}
-                    placeholder="URL da mídia (https://...)"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                    onChange={(url) => setForm((f) => ({ ...f, mediaUrl: url }))}
+                    folder="broadcasts"
                   />
                 )}
               </div>

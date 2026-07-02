@@ -46,6 +46,8 @@ export async function POST(request: NextRequest) {
   // Upload via FormData (server-side, para áudio e imagens)
   const formData = await request.formData();
   const file = formData.get('file') as File | null;
+  const folderRaw = (formData.get('folder') as string | null) || 'flows';
+  const folder = folderRaw.replace(/[^a-z0-9_-]/gi, '') || 'flows';
 
   if (!file) return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 });
   if (!ALLOWED_TYPES.includes(file.type)) {
@@ -55,7 +57,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'FILE_TOO_LARGE' }, { status: 413 });
   }
 
-  const filename = `flows/${Date.now()}-${sanitizeName(file.name)}`;
+  const filename = `${folder}/${Date.now()}-${sanitizeName(file.name)}`;
   const blob = await put(filename, file.stream(), { access: 'public', contentType: file.type });
   return NextResponse.json({ url: blob.url });
 }
