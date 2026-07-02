@@ -4,6 +4,7 @@ import {
   listConversations,
   dedupeConversations,
   canonicalPhoneKey,
+  mergeConversationInto,
   type ConvMode,
 } from '@/lib/conversationsStore';
 
@@ -45,6 +46,15 @@ export async function GET() {
     else offline = true;
   } catch {
     offline = true;
+  }
+
+  // Conversas-fantasma: registros do CRM antigos com chave @lid. O bot conhece o
+  // número real (senderPn) — funde o fantasma na conversa do telefone verdadeiro.
+  for (const b of botConvs) {
+    const pn = b.lastReceivedMsg?.key?.senderPn;
+    if (b.phone.includes('@lid') && pn) {
+      try { await mergeConversationInto(b.phone, pn); } catch { /* não bloqueia */ }
+    }
   }
 
   // Funde duplicatas persistidas (com/sem nono dígito, formatos antigos)
