@@ -1,6 +1,7 @@
 import { kvLoad, kvSave } from './kvStore';
-import { listConversations } from './conversationsStore';
+import { listConversations, canonicalPhoneKey } from './conversationsStore';
 import { getFlowsForTrigger, triggerFlow, wasFlowRecentlyTriggered } from './flowsStore';
+import { getSettings } from './settingsStore';
 
 // Follow-up automático "sem resposta":
 // Para cada fluxo ativo com trigger 'no_response' (triggerData.hours, padrão 24h),
@@ -28,12 +29,19 @@ export async function checkNoResponseFollowups(): Promise<{ triggered: number } 
   const conversations = await listConversations();
   let triggered = 0;
 
+  // Donos/admins nunca recebem follow-up (o chat deles é canal de treinamento)
+  const settings = await getSettings();
+  const adminKeys = [settings.diegoPhone, settings.michellePhone]
+    .map((p) => canonicalPhoneKey(p || ''))
+    .filter((k) => k.length >= 10);
+
   for (const flow of flows) {
     const hours = Math.max(1, Number(flow.triggerData?.hours) || 24);
     const cutoff = Date.now() - hours * 60 * 60 * 1000;
 
     for (const conv of conversations) {
       if (conv.mode !== 'bot') continue; // em atendimento humano/finalizada: não perturba
+      if (adminKeys.includes(canonicalPhoneKey(conv.phone))) continue;
       if (conv.messages.length < 2) continue;
 
       const lastMsg = conv.messages[conv.messages.length - 1];

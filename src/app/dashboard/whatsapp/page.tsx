@@ -143,9 +143,13 @@ export default function WhatsAppPage() {
       if (sr.ok) setSettings(await sr.json());
       if (crmr.ok) {
         const crm = await crmr.json();
-        if (crm.settings?.typingDelaySeconds !== undefined) {
-          setSettings((s) => ({ ...s, typingDelaySeconds: crm.settings.typingDelaySeconds }));
-        }
+        setSettings((s) => ({
+          ...s,
+          ...(crm.settings?.typingDelaySeconds !== undefined ? { typingDelaySeconds: crm.settings.typingDelaySeconds } : {}),
+          // Telefones dos donos vivem no CRM (persistente) — prevalecem sobre o bot
+          ...(crm.settings?.diegoPhone ? { diegoPhone: crm.settings.diegoPhone } : {}),
+          ...(crm.settings?.michellePhone ? { michellePhone: crm.settings.michellePhone } : {}),
+        }));
       }
     } catch { /* bot offline */ }
   }, []);
@@ -174,7 +178,11 @@ export default function WhatsAppPage() {
         fetch('/api/whatsapp/settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ typingDelaySeconds: settings.typingDelaySeconds }),
+          body: JSON.stringify({
+            typingDelaySeconds: settings.typingDelaySeconds,
+            diegoPhone: settings.diegoPhone,
+            michellePhone: settings.michellePhone,
+          }),
         }),
       ]);
       toast.success('Configurações salvas!');

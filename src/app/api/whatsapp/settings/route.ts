@@ -14,6 +14,9 @@ export async function POST(request: NextRequest) {
       'businessHoursEnabled',
       'businessHours',
       'outOfHoursMessage',
+      'typingDelaySeconds',
+      'diegoPhone',
+      'michellePhone',
     ];
     const clean: any = {};
     for (const k of allowed) if (patch[k] !== undefined) clean[k] = patch[k];

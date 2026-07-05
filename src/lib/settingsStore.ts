@@ -16,6 +16,10 @@ export interface Settings {
   businessHours: BusinessHour[];
   outOfHoursMessage: string;
   typingDelaySeconds: number; // segundos de "digitando..." antes de responder (0 = desativado)
+  // Donos/admins: recebem notificações do sistema no WhatsApp e, quando mandam
+  // mensagem para o bot, caem no chat de treinamento (não viram lead).
+  diegoPhone: string;
+  michellePhone: string;
 }
 
 const KV_KEY = 'settings';
@@ -25,6 +29,8 @@ const DEFAULTS: Settings = {
   operatorNotes: '',
   businessHoursEnabled: false,
   typingDelaySeconds: 2,
+  diegoPhone: '',
+  michellePhone: '',
   businessHours: [
     { day: 1, open: '08:00', close: '18:00', enabled: true },
     { day: 2, open: '08:00', close: '18:00', enabled: true },

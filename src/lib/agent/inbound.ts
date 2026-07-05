@@ -1,5 +1,6 @@
-import { appendMessage, toClaudeHistory, type Conversation } from '@/lib/conversationsStore';
+import { appendMessage, toClaudeHistory, canonicalPhoneKey, type Conversation } from '@/lib/conversationsStore';
 import { getSettings, isWithinBusinessHours } from '@/lib/settingsStore';
+import { notifyOwners } from '@/lib/notify';
 import { findLeadByPhone, upsertLeadFromContact, updateLead, type Lead } from '@/lib/leadsStore';
 import { runAgent, aiEnabled } from './brain';
 import { getFlowsForTrigger, triggerFlow, wasFlowRecentlyTriggered } from '@/lib/flowsStore';
@@ -86,6 +87,27 @@ async function buildClientContext(phone: string, lead: Lead | undefined, conv: C
   return parts.join('\n');
 }
 
+// Chat de treinamento via WhatsApp: mensagens dos donos vão direto para o motor
+// do "Treinar o Bot" (mesmo do estúdio na UI) e a resposta confirma o que mudou.
+async function processAdminMessage(_phone: string, text: string): Promise<InboundResult> {
+  const base = { mode: 'admin', leadCreated: false, aiEnabled: true, typingDelay: 0 };
+
+  try {
+    const { runTraining } = await import('@/lib/training');
+    const { reply, actionsCreated } = await runTraining(text);
+    const suffix = actionsCreated.length > 0 ? `\n\n✅ ${actionsCreated.join('\n✅ ')}` : '';
+    return { ...base, reply: `⚙️ ${reply}${suffix}`, reason: 'admin_training' };
+  } catch (e) {
+    const msg = (e as Error).message;
+    return {
+      ...base,
+      reply: `⚙️ Não consegui aplicar agora: ${msg}`,
+      aiEnabled: false,
+      reason: 'admin_training_error',
+    };
+  }
+}
+
 export async function processInbound(
   phone: string,
   text: string,
@@ -93,6 +115,16 @@ export async function processInbound(
   lid?: string
 ): Promise<InboundResult> {
   const settings = await getSettings();
+
+  // 0. Mensagem de um DONO/ADMIN (Diego/Michelle)? Vira chat de treinamento:
+  // não cria lead, não roda fluxos — a instrução é aplicada no bot na hora.
+  const senderKey = canonicalPhoneKey(phone);
+  const adminPhones = [settings.diegoPhone, settings.michellePhone]
+    .map((p) => canonicalPhoneKey(p || ''))
+    .filter((k) => k.length >= 10);
+  if (senderKey && adminPhones.includes(senderKey)) {
+    return processAdminMessage(phone, text);
+  }
 
   // 1. registra a mensagem recebida
   let conv = await appendMessage(phone, { role: 'user', content: text }, contactName);
@@ -133,6 +165,14 @@ export async function processInbound(
     notes: existingLead ? undefined : 'Lead criado pelo agente do WhatsApp',
   });
   leadCreated = up.created;
+
+  // 2a-bis. notifica os donos no WhatsApp sobre o lead novo
+  if (leadCreated) {
+    const nomeLead = contactName || leadPhone;
+    void notifyOwners(
+      `🆕 *Novo lead no WhatsApp*\n${nomeLead} (${leadPhone.split('@')[0]})\n💬 "${text.slice(0, 150)}"`
+    );
+  }
 
   // 2b. dispara fluxos de novo_lead automaticamente
   if (leadCreated) {

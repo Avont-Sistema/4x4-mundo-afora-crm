@@ -207,6 +207,16 @@ export async function POST(request: NextRequest) {
         const result = await enrollClient(exp, client, { adults, children, observations: obs });
         if (result.enrollment) enrolled = true;
         else if (result.error) alreadyEnrolled = true;
+
+        // Notifica os donos no WhatsApp sobre a inscrição recebida
+        if (enrolled) {
+          const { notifyOwners } = await import('@/lib/notify');
+          void notifyOwners(
+            `📋 *Nova inscrição pelo formulário!*\n${client.name} → ${exp.routeName}\n` +
+            `${adults} adulto(s)${children ? ` + ${children} criança(s)` : ''}` +
+            (client.phone ? `\n📞 ${client.phone}` : '')
+          );
+        }
       }
     }
 

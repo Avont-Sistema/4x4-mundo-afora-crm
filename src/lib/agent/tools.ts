@@ -9,6 +9,7 @@ import { clientsStore } from '@/lib/clientsStore';
 import { upsertLeadFromContact, findLeadByPhone } from '@/lib/leadsStore';
 import { setMode } from '@/lib/conversationsStore';
 import { createCharge } from '@/lib/payments';
+import { notifyOwners } from '@/lib/notify';
 
 // ── Definições de tools no formato OpenAI (compatível com DeepSeek) ──────────
 export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
@@ -361,6 +362,10 @@ export async function executeTool(
       };
       exp.enrollments.push(enr);
       await expeditionsStore.touch(exp.id);
+      void notifyOwners(
+        `🎉 *Cliente fechado pelo bot!*\n${client.name} → ${exp.routeName}\n` +
+        `${adultos} adulto(s)${criancas ? ` + ${criancas} criança(s)` : ''} · R$ ${enr.agreedPrice.toLocaleString('pt-BR')}`
+      );
       return { sucesso: true, matricula_id: enr.id, valor: enr.agreedPrice };
     }
 
@@ -382,6 +387,10 @@ export async function executeTool(
       enr.status = 'confirmado';
       enr.updatedAt = new Date().toISOString();
       await expeditionsStore.touch(exp.id);
+      void notifyOwners(
+        `💰 *Pagamento registrado*\n${client?.name ?? phone.split('@')[0]} · ${exp.routeName}\n` +
+        `R$ ${Number(input.valor).toLocaleString('pt-BR')} (${input.metodo || 'link'})`
+      );
       return { sucesso: true };
     }
 
@@ -409,6 +418,12 @@ export async function executeTool(
 
     case 'escalar_humano': {
       await setMode(phone, 'human');
+      const lead = await findLeadByPhone(phone);
+      void notifyOwners(
+        `🚨 *Conversa precisa da equipe*\n${lead?.name ?? phone.split('@')[0]} (${phone.split('@')[0]})` +
+        (input.motivo ? `\nMotivo: ${input.motivo}` : '') +
+        `\n👉 Aba "Aguardando Equipe" no CRM`
+      );
       return { sucesso: true, mensagem: 'Conversa transferida para atendimento humano.' };
     }
 
