@@ -18,6 +18,10 @@ export interface FamilyMember {
   height?: number; // cm
   shirtSize?: string;
   priceCategory?: PriceCategory; // sobrepõe a dedução por idade na planilha do fornecedor
+  // Hotel Internacional (Feature 6)
+  passportNumber?: string;
+  passportExpiry?: string;
+  nationality?: string;
 }
 
 export interface Vehicle {
@@ -55,6 +59,10 @@ export interface Client extends BaseRecord {
   origin?: string;
   howFound?: string; // como nos encontrou: instagram, meta_ads, google, site, indicacao, whatsapp, outro
   shirtSize?: string; // tamanho de camiseta do titular
+  // Hotel Internacional (Feature 6)
+  passportNumber?: string;
+  passportExpiry?: string;
+  nationality?: string;
 }
 
 function seed(): Client[] {

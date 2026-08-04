@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, UserPlus, Car, Briefcase, Users, Trash2, Phone, Shirt } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatCpf, cpfError } from '@/lib/cpf';
 
 type PriceCategory = '' | 'adulto' | 'crianca' | 'estudante' | 'idoso';
 
@@ -147,7 +148,12 @@ export default function ClientForm({
               <input className="input md:col-span-2" placeholder="Nome completo *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               <input className="input" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               <input className="input" placeholder="Telefone / WhatsApp" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-              <input className="input" placeholder="CPF" value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} />
+              <div>
+                <input className="input w-full" placeholder="CPF" value={form.cpf} onChange={(e) => setForm({ ...form, cpf: formatCpf(e.target.value) })} />
+                {form.cpf.trim() && cpfError(form.cpf) && (
+                  <p className="text-[11px] text-rose-500 mt-1">{cpfError(form.cpf)}</p>
+                )}
+              </div>
               <div>
                 <label className="text-xs text-gray-500">Nascimento</label>
                 <input type="date" className="input" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} />

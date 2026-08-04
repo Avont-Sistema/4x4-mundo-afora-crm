@@ -7,6 +7,7 @@ import {
   type FamilyMember,
 } from '@/lib/clientsStore';
 import { expeditionsStore, enrollClient } from '@/lib/expeditionsStore';
+import { suppliersStore } from '@/lib/suppliersStore';
 import { getTermTemplate } from '@/lib/contractsStore';
 import { renderTerm, formatSignLine, TERM_VERSION } from '@/lib/imageRightsTerm';
 
@@ -23,6 +24,9 @@ function normalizeFamily(family: any[]): FamilyMember[] {
     weight: m.weight ? Number(m.weight) : undefined,
     height: m.height ? Number(m.height) : undefined,
     shirtSize: m.shirtSize || undefined,
+    passportNumber: m.passportNumber || undefined,
+    passportExpiry: m.passportExpiry || undefined,
+    nationality: m.nationality || undefined,
   }));
 }
 
@@ -40,6 +44,17 @@ export async function GET(request: NextRequest) {
 
   const { template, signCity } = await getTermTemplate();
   const exp = expId ? await expeditionsStore.get(expId) : null;
+
+  // Feature 3/6: Hotel Dinâmico — informa ao formulário se a expedição tem
+  // fornecedor Hotel (comum ou internacional), para mostrar/ocultar campos.
+  let hasHotel = false;
+  let hasInternationalHotel = false;
+  if (exp && exp.supplierIds.length > 0) {
+    const allSuppliers = await suppliersStore.all();
+    const used = allSuppliers.filter((s) => exp.supplierIds.includes(s.id));
+    hasHotel = used.some((s) => s.type === 'hotel' || s.type === 'hotel_internacional');
+    hasInternationalHotel = used.some((s) => s.type === 'hotel_internacional');
+  }
 
   const term = {
     text: renderTerm(template, {
@@ -61,6 +76,8 @@ export async function GET(request: NextRequest) {
           location: exp.location,
           startDate: exp.startDate,
           endDate: exp.endDate,
+          hasHotel,
+          hasInternationalHotel,
         }
       : null,
     term,
@@ -98,6 +115,9 @@ export async function POST(request: NextRequest) {
       shirtSize: (body.shirtSize as string | undefined) || undefined,
       shirtSizes: Array.isArray(body.shirtSizes) ? (body.shirtSizes as string[]) : [],
       roomConfig: body.roomConfig || undefined,
+      passportNumber: body.passportNumber || undefined,
+      passportExpiry: body.passportExpiry || undefined,
+      nationality: body.nationality || undefined,
       emergencyContact: body.emergencyContact || undefined,
       petInfo: body.petInfo || undefined,
       howFound: (body.howFound as string | undefined) || undefined,
@@ -138,6 +158,9 @@ export async function POST(request: NextRequest) {
         shirtSize: incoming.shirtSize || existing.shirtSize,
         shirtSizes,
         roomConfig: fill(existing.roomConfig, incoming.roomConfig),
+        passportNumber: fill(existing.passportNumber, incoming.passportNumber),
+        passportExpiry: fill(existing.passportExpiry, incoming.passportExpiry),
+        nationality: fill(existing.nationality, incoming.nationality),
         emergencyContact: existing.emergencyContact?.name
           ? existing.emergencyContact
           : incoming.emergencyContact
@@ -167,6 +190,9 @@ export async function POST(request: NextRequest) {
         shirtSize: incoming.shirtSize,
         shirtSizes: incoming.shirtSizes,
         roomConfig: incoming.roomConfig,
+        passportNumber: incoming.passportNumber,
+        passportExpiry: incoming.passportExpiry,
+        nationality: incoming.nationality,
         emergencyContact: incoming.emergencyContact
           ? { name: incoming.emergencyContact, phone: '' }
           : undefined,

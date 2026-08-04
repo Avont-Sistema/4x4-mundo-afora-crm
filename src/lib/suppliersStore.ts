@@ -8,11 +8,16 @@ export type { BillingMode };
 
 export type SupplierType =
   | 'hotel'
+  | 'hotel_internacional'
   | 'restaurante'
   | 'transporte'
   | 'guia'
   | 'passeio'
   | 'outro';
+
+// Tipos de fornecedor que contam como "hotel" para fins de formulário
+// dinâmico (pedir configuração de quarto) — Feature 3.
+export const HOTEL_SUPPLIER_TYPES: SupplierType[] = ['hotel', 'hotel_internacional'];
 
 export interface Supplier extends BaseRecord {
   name: string;

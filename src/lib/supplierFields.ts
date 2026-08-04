@@ -32,6 +32,8 @@ export interface PersonRow {
   emergency: string;
   responsible: string;
   notes: string;
+  passport: string;
+  nationality: string;
   isChild: boolean;
   priceCategory?: PriceCategory; // categoria manual de tarifário (sobrepõe idade)
 }
@@ -56,6 +58,8 @@ export const EXPORT_FIELDS: { id: keyof PersonRow; label: string }[] = [
   { id: 'emergency', label: 'Contato Emergência' },
   { id: 'responsible', label: 'Responsável (carro)' },
   { id: 'notes', label: 'Observações' },
+  { id: 'passport', label: 'Passaporte' },
+  { id: 'nationality', label: 'Nacionalidade' },
 ];
 
 export const DEFAULT_EXPORT_FIELDS: (keyof PersonRow)[] = [

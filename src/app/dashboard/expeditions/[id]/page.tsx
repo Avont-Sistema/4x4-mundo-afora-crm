@@ -31,6 +31,10 @@ import {
 import toast from 'react-hot-toast';
 import { formatBRL, formatDate } from '@/lib/format';
 import { generateContractPdf } from '@/lib/contractPdf';
+import SupplierFormModal, {
+  type Supplier as FullSupplier,
+  SUPPLIER_TYPE_LABELS,
+} from '@/components/SupplierFormModal';
 
 // ---- tipos (resumidos do detail do backend) ----
 interface Payment { id: string; date: string; amount: number; method: string; description?: string }
@@ -826,13 +830,18 @@ function ImportPlanModal({
 // Aba FORNECEDORES
 // ===========================================================================
 function SuppliersTab({ exp, onApply }: { exp: Expedition; onApply: (d: any) => void }) {
-  const [all, setAll] = useState<Supplier[]>([]);
+  const [all, setAll] = useState<FullSupplier[]>([]);
+  const [editingSupplier, setEditingSupplier] = useState<FullSupplier | null>(null);
 
-  useEffect(() => {
+  const loadSuppliers = useCallback(() => {
     fetch('/api/suppliers')
       .then((r) => r.json())
       .then((d) => setAll(d.suppliers || []));
   }, []);
+
+  useEffect(() => {
+    loadSuppliers();
+  }, [loadSuppliers]);
 
   const toggle = async (supplierId: string) => {
     const has = exp.supplierIds.includes(supplierId);
@@ -848,6 +857,11 @@ function SuppliersTab({ exp, onApply }: { exp: Expedition; onApply: (d: any) => 
     onApply(data);
   };
 
+  const handleSaved = (saved: FullSupplier) => {
+    setAll((prev) => prev.map((x) => (x.id === saved.id ? saved : x)));
+    setEditingSupplier(null);
+  };
+
   return (
     <div>
       <p className="text-sm text-gray-500 mb-4">
@@ -860,18 +874,30 @@ function SuppliersTab({ exp, onApply }: { exp: Expedition; onApply: (d: any) => 
         {all.map((s) => {
           const active = exp.supplierIds.includes(s.id);
           return (
-            <button
+            <div
               key={s.id}
+              role="button"
+              tabIndex={0}
               onClick={() => toggle(s.id)}
-              className={`card text-left transition-all ${
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggle(s.id); }}
+              className={`card text-left transition-all cursor-pointer ${
                 active ? 'ring-2 ring-yellow-400 bg-yellow-50' : 'hover:shadow-md'
               }`}
             >
               <div className="flex justify-between items-start mb-2">
                 <h4 className="font-semibold">{s.name}</h4>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                  {s.type}
-                </span>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                    {SUPPLIER_TYPE_LABELS[s.type] || s.type}
+                  </span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setEditingSupplier(s); }}
+                    title="Editar fornecedor"
+                    className="p-1 hover:bg-white/70 rounded"
+                  >
+                    <Pencil size={13} className="text-gray-500" />
+                  </button>
+                </div>
               </div>
               <p className="text-xs text-gray-500">
                 Adulto: <strong>{formatBRL(s.costPerPerson)}</strong> · Criança:{' '}
@@ -880,7 +906,7 @@ function SuppliersTab({ exp, onApply }: { exp: Expedition; onApply: (d: any) => 
               <p className={`text-xs mt-2 font-medium ${active ? 'text-amber-600' : 'text-gray-400'}`}>
                 {active ? '✓ Incluído no projeto' : 'Clique para incluir'}
               </p>
-            </button>
+            </div>
           );
         })}
         {all.length === 0 && (
@@ -892,6 +918,14 @@ function SuppliersTab({ exp, onApply }: { exp: Expedition; onApply: (d: any) => 
           </div>
         )}
       </div>
+
+      {editingSupplier && (
+        <SupplierFormModal
+          supplier={editingSupplier}
+          onClose={() => setEditingSupplier(null)}
+          onSaved={handleSaved}
+        />
+      )}
     </div>
   );
 }

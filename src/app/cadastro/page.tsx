@@ -4,11 +4,12 @@ import { useState, useEffect, useRef } from 'react';
 import {
   MapPin, Car, Users, AlertCircle, ChevronRight, Check, Plus, Trash2, Phone,
   Shirt, BedDouble, Mountain, Calendar, Search, UserCheck, Ruler, ChevronDown,
-  PenLine, Eraser, Download, FileSignature, ArrowLeft,
+  PenLine, Eraser, Download, FileSignature, ArrowLeft, Globe,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { generateContractPdf, type ContractPdfData } from '@/lib/contractPdf';
 import { formatSignLine } from '@/lib/imageRightsTerm';
+import { formatCpf, cpfError, cpfDigits } from '@/lib/cpf';
 
 
 const ROOM_OPTIONS = [
@@ -40,6 +41,7 @@ interface Passenger {
   name: string;
   isChild: boolean;
   shirtSize: string;
+  passport: string;
 }
 
 interface ExpeditionInfo {
@@ -48,6 +50,8 @@ interface ExpeditionInfo {
   location?: string;
   startDate?: string;
   endDate?: string;
+  hasHotel?: boolean;
+  hasInternationalHotel?: boolean;
 }
 
 interface TermInfo {
@@ -79,6 +83,12 @@ interface FormData {
   companionAge: string;
   companionBirthDate: string;
   companionJob: string;
+  passportNumber: string;
+  passportExpiry: string;
+  nationality: string;
+  companionPassportNumber: string;
+  companionPassportExpiry: string;
+  companionNationality: string;
   hasAdditional: boolean | null;
   additionalPassengers: Passenger[];
   petInfo: string;
@@ -112,6 +122,12 @@ const emptyForm: FormData = {
   companionAge: '',
   companionBirthDate: '',
   companionJob: '',
+  passportNumber: '',
+  passportExpiry: '',
+  nationality: '',
+  companionPassportNumber: '',
+  companionPassportExpiry: '',
+  companionNationality: '',
   hasAdditional: null,
   additionalPassengers: [],
   petInfo: '',
@@ -170,12 +186,20 @@ export default function CadastroPage() {
       .catch(() => {});
   }, [expId]);
 
+  // Feature 3: Hotel Dinâmico — só pede config. de quarto se a expedição tiver
+  // fornecedor Hotel (ou Hotel Internacional). Sem expedição específica (link
+  // genérico) ou ainda carregando, mantém o campo visível por segurança.
+  const showHotelFields = !expedition || expedition.hasHotel !== false;
+  // Feature 6: Hotel Internacional — só pede passaporte/nacionalidade quando a
+  // expedição tem um fornecedor Hotel Internacional vinculado.
+  const showInternationalFields = expedition?.hasInternationalHotel === true;
+
   const set = <K extends keyof FormData>(key: K, value: FormData[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
   const addPassenger = () => {
     if (form.additionalPassengers.length >= 4) return;
-    setForm((f) => ({ ...f, additionalPassengers: [...f.additionalPassengers, { name: '', isChild: false, shirtSize: '' }] }));
+    setForm((f) => ({ ...f, additionalPassengers: [...f.additionalPassengers, { name: '', isChild: false, shirtSize: '', passport: '' }] }));
   };
 
   const updatePassenger = (i: number, patch: Partial<Passenger>) =>
@@ -189,9 +213,9 @@ export default function CadastroPage() {
 
   // --- Feature 2: buscar cliente já cadastrado por CPF ---
   const doLookup = async () => {
-    const cpf = lookupCpf.replace(/\D/g, '');
+    const cpf = cpfDigits(lookupCpf);
     if (cpf.length !== 11) {
-      toast.error('Digite um CPF válido (11 dígitos)');
+      toast.error(`CPF incompleto, faltam ${11 - cpf.length} dígito(s)`);
       return;
     }
     setLookupLoading(true);
@@ -235,13 +259,27 @@ export default function CadastroPage() {
     if (!form.confirmedData) { toast.error('Confirme que os dados são reais'); return; }
     if (!form.name.trim()) { toast.error('Informe o nome completo'); return; }
     if (!form.cpf.trim()) { toast.error('Informe o CPF'); return; }
+    const cpfErr = cpfError(form.cpf);
+    if (cpfErr) { toast.error(cpfErr); return; }
     if (!form.phone.trim()) { toast.error('Informe o telefone/WhatsApp'); return; }
     if (!form.companionName.trim()) { toast.error('Informe o nome do acompanhante'); return; }
     if (!form.companionCpf.trim()) { toast.error('Informe o CPF do acompanhante'); return; }
+    const companionCpfErr = cpfError(form.companionCpf);
+    if (companionCpfErr) { toast.error(`Acompanhante: ${companionCpfErr}`); return; }
     if (form.hasAdditional === null) { toast.error('Informe se há passageiros adicionais'); return; }
     if (!form.emergencyContact.trim()) { toast.error('Informe o contato de emergência'); return; }
-    if (!form.roomConfig) { toast.error('Selecione a configuração do quarto'); return; }
+    if (showHotelFields && !form.roomConfig) { toast.error('Selecione a configuração do quarto'); return; }
     if (!form.driverShirtSize) { toast.error('Selecione o tamanho de camiseta do motorista principal'); return; }
+    if (showInternationalFields) {
+      if (!form.passportNumber.trim() || !form.nationality.trim()) {
+        toast.error('Informe passaporte e nacionalidade (hotel internacional)');
+        return;
+      }
+      if (!form.companionPassportNumber.trim() || !form.companionNationality.trim()) {
+        toast.error('Informe passaporte e nacionalidade do acompanhante (hotel internacional)');
+        return;
+      }
+    }
     if (!form.confirmedResponsibility) { toast.error('Confirme a responsabilidade sobre os dados'); return; }
 
     setSaving(true);
@@ -257,6 +295,9 @@ export default function CadastroPage() {
           job: form.companionJob || undefined,
           isChild: false,
           shirtSize: form.companionShirtSize || undefined,
+          passportNumber: form.companionPassportNumber || undefined,
+          passportExpiry: form.companionPassportExpiry || undefined,
+          nationality: form.companionNationality || undefined,
         });
       }
 
@@ -267,6 +308,7 @@ export default function CadastroPage() {
             relation: p.isChild ? 'filho' : 'outro',
             isChild: p.isChild,
             shirtSize: p.shirtSize || undefined,
+            passportNumber: p.passport || undefined,
           });
         }
       }
@@ -305,6 +347,9 @@ export default function CadastroPage() {
           shirtSize: form.driverShirtSize || undefined,
           shirtSizes: allShirtSizes,
           roomConfig: form.roomConfig || undefined,
+          passportNumber: form.passportNumber || undefined,
+          passportExpiry: form.passportExpiry || undefined,
+          nationality: form.nationality || undefined,
           emergencyContact: form.emergencyContact || undefined,
           petInfo: form.petInfo || undefined,
           howFound: form.howFound || undefined,
@@ -445,6 +490,17 @@ export default function CadastroPage() {
 
       <div className="max-w-2xl mx-auto p-4 space-y-4 pb-12">
 
+        {/* Aviso em destaque: dados reais e completos */}
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 flex gap-3">
+          <AlertCircle size={18} className="flex-shrink-0 mt-0.5 text-amber-500" />
+          <p>
+            Preencha todos os dados solicitados. Eles precisam ser reais e completos, assim
+            como em seus documentos, para contratação do Seguro Aventura, organização de kits e
+            montagem de documentação obrigatória para o evento. Temos compromisso em manter seus
+            dados pessoais em sigilo.
+          </p>
+        </div>
+
         {/* Banner da expedição */}
         {expedition && (
           <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-xl p-5 shadow-md">
@@ -485,7 +541,7 @@ export default function CadastroPage() {
                   className="input flex-1"
                   placeholder="Digite seu CPF"
                   value={lookupCpf}
-                  onChange={(e) => setLookupCpf(e.target.value)}
+                  onChange={(e) => setLookupCpf(formatCpf(e.target.value))}
                   onKeyDown={(e) => { if (e.key === 'Enter') doLookup(); }}
                 />
                 <button
@@ -535,7 +591,12 @@ export default function CadastroPage() {
           <div className="grid md:grid-cols-2 gap-3">
             <input className="input md:col-span-2" placeholder="Nome completo *" value={form.name} onChange={(e) => set('name', e.target.value)} />
             <input className="input" placeholder="Idade *" value={form.age} onChange={(e) => set('age', e.target.value)} />
-            <input className="input" placeholder="CPF *" value={form.cpf} onChange={(e) => set('cpf', e.target.value)} />
+            <div>
+              <input className="input w-full" placeholder="CPF *" value={form.cpf} onChange={(e) => set('cpf', formatCpf(e.target.value))} />
+              {form.cpf.trim() && cpfError(form.cpf) && (
+                <p className="text-[11px] text-rose-500 mt-1">{cpfError(form.cpf)}</p>
+              )}
+            </div>
             <div>
               <label className="text-xs text-gray-500">Data de nascimento *</label>
               <input type="date" className="input" value={form.birthDate} onChange={(e) => set('birthDate', e.target.value)} />
@@ -544,6 +605,23 @@ export default function CadastroPage() {
             <input className="input md:col-span-2" placeholder="Número de contato (telefone/WhatsApp) *" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
           </div>
         </Card>
+
+        {/* Feature 6: Hotel Internacional — só aparece se a expedição tiver esse fornecedor */}
+        {showInternationalFields && (
+          <Card title="Passaporte e Nacionalidade (hotel internacional)" icon={<Globe size={15} />}>
+            <p className="text-xs text-gray-500 mb-3">
+              Esta expedição inclui hospedagem internacional. Informe os dados de viagem do motorista principal.
+            </p>
+            <div className="grid md:grid-cols-2 gap-3">
+              <input className="input" placeholder="Número do passaporte *" value={form.passportNumber} onChange={(e) => set('passportNumber', e.target.value)} />
+              <div>
+                <label className="text-xs text-gray-500">Validade do passaporte *</label>
+                <input type="date" className="input" value={form.passportExpiry} onChange={(e) => set('passportExpiry', e.target.value)} />
+              </div>
+              <input className="input md:col-span-2" placeholder="Nacionalidade *" value={form.nationality} onChange={(e) => set('nationality', e.target.value)} />
+            </div>
+          </Card>
+        )}
 
         {/* Endereço */}
         <Card title="Endereço" icon={<MapPin size={15} />}>
@@ -568,7 +646,12 @@ export default function CadastroPage() {
         <Card title="Acompanhante" icon={<Users size={15} />}>
           <div className="grid md:grid-cols-2 gap-3">
             <input className="input md:col-span-2" placeholder="Nome completo do acompanhante *" value={form.companionName} onChange={(e) => set('companionName', e.target.value)} />
-            <input className="input" placeholder="CPF do acompanhante *" value={form.companionCpf} onChange={(e) => set('companionCpf', e.target.value)} />
+            <div>
+              <input className="input w-full" placeholder="CPF do acompanhante *" value={form.companionCpf} onChange={(e) => set('companionCpf', formatCpf(e.target.value))} />
+              {form.companionCpf.trim() && cpfError(form.companionCpf) && (
+                <p className="text-[11px] text-rose-500 mt-1">{cpfError(form.companionCpf)}</p>
+              )}
+            </div>
             <input className="input" placeholder="Idade do acompanhante *" value={form.companionAge} onChange={(e) => set('companionAge', e.target.value)} />
             <div>
               <label className="text-xs text-gray-500">Data de nascimento do acompanhante *</label>
@@ -576,6 +659,16 @@ export default function CadastroPage() {
             </div>
             <input className="input" placeholder="Profissão do acompanhante *" value={form.companionJob} onChange={(e) => set('companionJob', e.target.value)} />
           </div>
+          {showInternationalFields && (
+            <div className="grid md:grid-cols-2 gap-3 mt-3 pt-3 border-t border-gray-100">
+              <input className="input" placeholder="Passaporte do acompanhante *" value={form.companionPassportNumber} onChange={(e) => set('companionPassportNumber', e.target.value)} />
+              <div>
+                <label className="text-xs text-gray-500">Validade do passaporte *</label>
+                <input type="date" className="input" value={form.companionPassportExpiry} onChange={(e) => set('companionPassportExpiry', e.target.value)} />
+              </div>
+              <input className="input md:col-span-2" placeholder="Nacionalidade do acompanhante *" value={form.companionNationality} onChange={(e) => set('companionNationality', e.target.value)} />
+            </div>
+          )}
         </Card>
 
         {/* Passageiros adicionais */}
@@ -613,6 +706,9 @@ export default function CadastroPage() {
                       Sim, é filho(a)
                     </label>
                   </div>
+                  {showInternationalFields && (
+                    <input className="input bg-white mt-2" placeholder="Passaporte" value={p.passport} onChange={(e) => updatePassenger(i, { passport: e.target.value })} />
+                  )}
                 </div>
               ))}
               {form.additionalPassengers.length < 4 && (
@@ -634,18 +730,20 @@ export default function CadastroPage() {
           <input className="input" placeholder="Nome e número de contato para emergência *" value={form.emergencyContact} onChange={(e) => set('emergencyContact', e.target.value)} />
         </Card>
 
-        {/* Configuração do Quarto */}
-        <Card title="Configuração do Quarto" icon={<BedDouble size={15} />}>
-          <p className="text-xs text-gray-500 mb-3">Selecione a opção que melhor atende sua necessidade *</p>
-          <div className="space-y-2">
-            {ROOM_OPTIONS.map((opt) => (
-              <label key={opt} className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-gray-50 transition-colors">
-                <input type="radio" name="roomConfig" value={opt} checked={form.roomConfig === opt} onChange={() => set('roomConfig', opt)} className="accent-orange-500 w-4 h-4" />
-                <span className="text-sm">{opt}</span>
-              </label>
-            ))}
-          </div>
-        </Card>
+        {/* Configuração do Quarto — Feature 3: Hotel Dinâmico, só aparece com fornecedor Hotel */}
+        {showHotelFields && (
+          <Card title="Configuração do Quarto" icon={<BedDouble size={15} />}>
+            <p className="text-xs text-gray-500 mb-3">Selecione a opção que melhor atende sua necessidade *</p>
+            <div className="space-y-2">
+              {ROOM_OPTIONS.map((opt) => (
+                <label key={opt} className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-gray-50 transition-colors">
+                  <input type="radio" name="roomConfig" value={opt} checked={form.roomConfig === opt} onChange={() => set('roomConfig', opt)} className="accent-orange-500 w-4 h-4" />
+                  <span className="text-sm">{opt}</span>
+                </label>
+              ))}
+            </div>
+          </Card>
+        )}
 
         {/* Camisetas por pessoa */}
         <Card title="Camisetas" icon={<Shirt size={15} />}>
@@ -712,20 +810,14 @@ export default function CadastroPage() {
           <div className="flex gap-3">
             <AlertCircle size={16} className="flex-shrink-0 mt-0.5 text-amber-500" />
             <div>
-              <p className="font-semibold mb-2">Política de Cancelamento e Devolução de Valores</p>
+              <p className="font-semibold mb-2">Política de Cancelamento</p>
               <p className="text-xs mb-2">Em caso de desistência da viagem, a devolução segue a antecedência do cancelamento:</p>
-              <ul className="text-xs leading-relaxed space-y-0.5 mb-2">
-                <li>• Até <strong>120 dias</strong> antes da viagem: <strong>100%</strong> devolvido.</li>
-                <li>• Até <strong>90 dias</strong> antes da viagem: <strong>90%</strong> devolvido.</li>
-                <li>• Até <strong>60 dias</strong> antes da viagem: <strong>80%</strong> devolvido.</li>
-                <li>• Até <strong>30 dias</strong> antes da viagem: <strong>50%</strong> devolvido.</li>
-                <li>• Até <strong>15 dias</strong> antes da viagem: <strong>30%</strong> devolvido.</li>
-                <li>• <strong>Após os 15 dias</strong> que antecedem a viagem: <strong>sem devolução</strong> por desistência.</li>
+              <ul className="text-xs leading-relaxed space-y-0.5">
+                <li>• Até <strong>30 dias</strong> antes da viagem: <strong>100%</strong> devolvido.</li>
+                <li>• Até <strong>15 dias</strong> antes da viagem: <strong>50%</strong> devolvido.</li>
+                <li>• Até <strong>10 dias</strong> antes da viagem: <strong>30%</strong> devolvido.</li>
+                <li>• <strong>Após os 10 dias</strong> que antecedem a viagem: <strong>sem devolução</strong> por desistência.</li>
               </ul>
-              <p className="text-xs leading-relaxed">
-                Podemos segurar o valor aportado como <strong>crédito futuro</strong>, mas será descontado <strong>30% do valor integral</strong> da expedição
-                para cobrir os custos operacionais já assumidos pela organização.
-              </p>
             </div>
           </div>
         </div>
