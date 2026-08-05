@@ -37,12 +37,27 @@ const SHIRT_TABLE_INFANTIL = {
   manga: [9, 10, 11, 13, 14, 15, 16],
 };
 
+type PassengerRelation = 'filho' | 'pai' | 'mae' | 'amigo' | 'outro';
+
+const PASSENGER_RELATION_OPTIONS: { value: PassengerRelation; label: string }[] = [
+  { value: 'filho', label: 'Filho(a)' },
+  { value: 'pai', label: 'Pai' },
+  { value: 'mae', label: 'Mãe' },
+  { value: 'amigo', label: 'Amigo(a)' },
+  { value: 'outro', label: 'Outro' },
+];
+
 interface Passenger {
   name: string;
-  isChild: boolean;
+  relation: PassengerRelation;
+  cpf: string;
+  birthDate: string;
+  job: string;
   shirtSize: string;
   passport: string;
 }
+
+const isChildPassenger = (p: Passenger) => p.relation === 'filho';
 
 interface ExpeditionInfo {
   id: string;
@@ -59,6 +74,11 @@ interface TermInfo {
   signCity?: string;
   signLine: string;
   version: string;
+}
+
+interface FieldError {
+  key: string;
+  message: string;
 }
 
 interface FormData {
@@ -91,6 +111,9 @@ interface FormData {
   companionNationality: string;
   hasAdditional: boolean | null;
   additionalPassengers: Passenger[];
+  hasPet: boolean | null;
+  petName: string;
+  petWeight: string;
   petInfo: string;
   emergencyContact: string;
   roomConfig: string;
@@ -130,6 +153,9 @@ const emptyForm: FormData = {
   companionNationality: '',
   hasAdditional: null,
   additionalPassengers: [],
+  hasPet: null,
+  petName: '',
+  petWeight: '',
   petInfo: '',
   emergencyContact: '',
   roomConfig: '',
@@ -168,6 +194,9 @@ export default function CadastroPage() {
   const [lookupLoading, setLookupLoading] = useState(false);
   const [prefilled, setPrefilled] = useState(false);
 
+  // Feature: resumo de erros — o que falta preencher, destacado em vermelho
+  const [errors, setErrors] = useState<FieldError[]>([]);
+
   // lê ?exp=<id> do link específico da expedição
   useEffect(() => {
     const p = new URLSearchParams(window.location.search).get('exp');
@@ -194,12 +223,23 @@ export default function CadastroPage() {
   // expedição tem um fornecedor Hotel Internacional vinculado.
   const showInternationalFields = expedition?.hasInternationalHotel === true;
 
+  // Marca em vermelho os campos que falharam na última tentativa de envio.
+  const hasError = (key: string) => errors.some((e) => e.key === key);
+  const errClass = (key: string, base = 'input') =>
+    hasError(key) ? `${base} border-rose-400 ring-1 ring-rose-300 bg-rose-50` : base;
+
   const set = <K extends keyof FormData>(key: K, value: FormData[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
   const addPassenger = () => {
     if (form.additionalPassengers.length >= 4) return;
-    setForm((f) => ({ ...f, additionalPassengers: [...f.additionalPassengers, { name: '', isChild: false, shirtSize: '', passport: '' }] }));
+    setForm((f) => ({
+      ...f,
+      additionalPassengers: [
+        ...f.additionalPassengers,
+        { name: '', relation: 'outro', cpf: '', birthDate: '', job: '', shirtSize: '', passport: '' },
+      ],
+    }));
   };
 
   const updatePassenger = (i: number, patch: Partial<Passenger>) =>
@@ -255,32 +295,82 @@ export default function CadastroPage() {
     }
   };
 
-  const handleSubmit = async () => {
-    if (!form.confirmedData) { toast.error('Confirme que os dados são reais'); return; }
-    if (!form.name.trim()) { toast.error('Informe o nome completo'); return; }
-    if (!form.cpf.trim()) { toast.error('Informe o CPF'); return; }
-    const cpfErr = cpfError(form.cpf);
-    if (cpfErr) { toast.error(cpfErr); return; }
-    if (!form.phone.trim()) { toast.error('Informe o telefone/WhatsApp'); return; }
-    if (!form.companionName.trim()) { toast.error('Informe o nome do acompanhante'); return; }
-    if (!form.companionCpf.trim()) { toast.error('Informe o CPF do acompanhante'); return; }
-    const companionCpfErr = cpfError(form.companionCpf);
-    if (companionCpfErr) { toast.error(`Acompanhante: ${companionCpfErr}`); return; }
-    if (form.hasAdditional === null) { toast.error('Informe se há passageiros adicionais'); return; }
-    if (!form.emergencyContact.trim()) { toast.error('Informe o contato de emergência'); return; }
-    if (showHotelFields && !form.roomConfig) { toast.error('Selecione a configuração do quarto'); return; }
-    if (!form.driverShirtSize) { toast.error('Selecione o tamanho de camiseta do motorista principal'); return; }
-    if (showInternationalFields) {
-      if (!form.passportNumber.trim() || !form.nationality.trim()) {
-        toast.error('Informe passaporte e nacionalidade (hotel internacional)');
-        return;
-      }
-      if (!form.companionPassportNumber.trim() || !form.companionNationality.trim()) {
-        toast.error('Informe passaporte e nacionalidade do acompanhante (hotel internacional)');
-        return;
-      }
+  // Coleta TODOS os erros do formulário de uma vez (em vez de parar no primeiro),
+  // para poder mostrar um resumo completo do que falta preencher.
+  const validateForm = (): FieldError[] => {
+    const errs: FieldError[] = [];
+    const req = (key: string, value: string, message: string) => {
+      if (!value.trim()) errs.push({ key, message });
+    };
+
+    if (!form.confirmedData) errs.push({ key: 'confirmedData', message: 'Confirme que os dados são reais' });
+
+    req('name', form.name, 'Informe o nome completo do motorista');
+    req('age', form.age, 'Informe a idade do motorista');
+    if (!form.cpf.trim()) errs.push({ key: 'cpf', message: 'Informe o CPF do motorista' });
+    else { const e = cpfError(form.cpf); if (e) errs.push({ key: 'cpf', message: `CPF do motorista: ${e}` }); }
+    if (!form.birthDate) errs.push({ key: 'birthDate', message: 'Informe a data de nascimento do motorista' });
+    req('job', form.job, 'Informe a profissão do motorista');
+    req('phone', form.phone, 'Informe o telefone/WhatsApp');
+
+    req('address', form.address, 'Informe o endereço residencial');
+    req('addressNumber', form.addressNumber, 'Informe o número/complemento do endereço');
+    req('cityState', form.cityState, 'Informe a cidade/estado');
+    req('cep', form.cep, 'Informe o CEP');
+
+    req('car', form.car, 'Informe o veículo (modelo, cor, ano)');
+    req('vehiclePlate', form.vehiclePlate, 'Informe a placa do veículo');
+
+    req('companionName', form.companionName, 'Informe o nome do acompanhante');
+    if (!form.companionCpf.trim()) errs.push({ key: 'companionCpf', message: 'Informe o CPF do acompanhante' });
+    else { const e = cpfError(form.companionCpf); if (e) errs.push({ key: 'companionCpf', message: `CPF do acompanhante: ${e}` }); }
+    req('companionAge', form.companionAge, 'Informe a idade do acompanhante');
+    if (!form.companionBirthDate) errs.push({ key: 'companionBirthDate', message: 'Informe a data de nascimento do acompanhante' });
+    req('companionJob', form.companionJob, 'Informe a profissão do acompanhante');
+
+    if (form.hasAdditional === null) errs.push({ key: 'hasAdditional', message: 'Informe se há passageiros adicionais' });
+    if (form.hasAdditional) {
+      form.additionalPassengers.forEach((p, i) => {
+        if (!p.name.trim()) return;
+        const label = `passageiro adicional ${i + 1}`;
+        if (!p.cpf.trim()) errs.push({ key: `passenger-${i}-cpf`, message: `Informe o CPF do ${label}` });
+        else { const e = cpfError(p.cpf); if (e) errs.push({ key: `passenger-${i}-cpf`, message: `CPF do ${label}: ${e}` }); }
+        if (!p.birthDate) errs.push({ key: `passenger-${i}-birthDate`, message: `Informe a data de nascimento do ${label}` });
+        if (!p.job.trim()) errs.push({ key: `passenger-${i}-job`, message: `Informe a profissão do ${label}` });
+      });
     }
-    if (!form.confirmedResponsibility) { toast.error('Confirme a responsabilidade sobre os dados'); return; }
+
+    if (form.hasPet === null) errs.push({ key: 'hasPet', message: 'Informe se vai levar pet' });
+    if (form.hasPet) {
+      req('petName', form.petName, 'Informe o nome do pet');
+      req('petWeight', form.petWeight, 'Informe o peso do pet');
+    }
+
+    req('emergencyContact', form.emergencyContact, 'Informe o contato de emergência');
+    if (showHotelFields && !form.roomConfig) errs.push({ key: 'roomConfig', message: 'Selecione a configuração do quarto' });
+    if (!form.driverShirtSize) errs.push({ key: 'driverShirtSize', message: 'Selecione o tamanho de camiseta do motorista principal' });
+
+    if (showInternationalFields) {
+      req('passportNumber', form.passportNumber, 'Informe o passaporte do motorista');
+      req('nationality', form.nationality, 'Informe a nacionalidade do motorista');
+      req('companionPassportNumber', form.companionPassportNumber, 'Informe o passaporte do acompanhante');
+      req('companionNationality', form.companionNationality, 'Informe a nacionalidade do acompanhante');
+    }
+
+    if (!form.confirmedResponsibility) errs.push({ key: 'confirmedResponsibility', message: 'Confirme a responsabilidade sobre os dados' });
+
+    return errs;
+  };
+
+  const handleSubmit = async () => {
+    const fieldErrors = validateForm();
+    if (fieldErrors.length > 0) {
+      setErrors(fieldErrors);
+      toast.error(`Faltam ${fieldErrors.length} ${fieldErrors.length === 1 ? 'item' : 'itens'} para completar o formulário — veja em vermelho no topo`);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    setErrors([]);
 
     setSaving(true);
     try {
@@ -305,8 +395,11 @@ export default function CadastroPage() {
         if (p.name.trim()) {
           family.push({
             name: p.name,
-            relation: p.isChild ? 'filho' : 'outro',
-            isChild: p.isChild,
+            relation: p.relation,
+            isChild: isChildPassenger(p),
+            document: p.cpf || undefined,
+            birthDate: p.birthDate || undefined,
+            job: p.job || undefined,
             shirtSize: p.shirtSize || undefined,
             passportNumber: p.passport || undefined,
           });
@@ -319,6 +412,14 @@ export default function CadastroPage() {
         form.companionShirtSize,
         ...form.additionalPassengers.map((p) => p.shirtSize),
       ].filter(Boolean) as string[];
+
+      const petInfo = form.hasPet
+        ? [
+            form.petName && `Nome: ${form.petName}`,
+            form.petWeight && `Peso: ${form.petWeight}kg`,
+            form.petInfo && `Raça/porte: ${form.petInfo}`,
+          ].filter(Boolean).join(' · ')
+        : '';
 
       const [city, state] = form.cityState.split('/').map((s) => s.trim());
 
@@ -351,7 +452,7 @@ export default function CadastroPage() {
           passportExpiry: form.passportExpiry || undefined,
           nationality: form.nationality || undefined,
           emergencyContact: form.emergencyContact || undefined,
-          petInfo: form.petInfo || undefined,
+          petInfo: petInfo || undefined,
           howFound: form.howFound || undefined,
           notes: form.notes || undefined,
         }),
@@ -379,9 +480,11 @@ export default function CadastroPage() {
       if (form.companionName.trim()) party.push({ name: form.companionName, cpf: form.companionCpf });
       form.additionalPassengers.forEach((p) => { if (p.name.trim()) party.push({ name: p.name }); });
 
-      // gera a data no momento exato da assinatura (horário do cliente)
-      const currentSignLine = term?.signCity
-        ? formatSignLine(term.signCity)
+      // Cidade do próprio signatário (não a cidade fixa da empresa) + data no
+      // momento exato da assinatura (horário do cliente).
+      const signCity = form.cityState.trim() || term?.signCity;
+      const currentSignLine = signCity
+        ? formatSignLine(signCity)
         : term?.signLine ?? '';
 
       const res = await fetch('/api/contracts', {
@@ -467,6 +570,7 @@ export default function CadastroPage() {
     return (
       <SignatureStep
         term={term}
+        signCity={form.cityState.trim() || term?.signCity}
         signerName={form.name}
         expeditionName={expeditionName}
         signing={signing}
@@ -489,6 +593,21 @@ export default function CadastroPage() {
       </div>
 
       <div className="max-w-2xl mx-auto p-4 space-y-4 pb-12">
+
+        {/* Resumo de erros: o que falta preencher/corrigir */}
+        {errors.length > 0 && (
+          <div className="bg-rose-50 border-2 border-rose-300 rounded-xl p-4 text-sm text-rose-800">
+            <p className="font-bold mb-2 flex items-center gap-2">
+              <AlertCircle size={16} className="text-rose-500" />
+              {errors.length === 1 ? '1 item precisa de atenção:' : `${errors.length} itens precisam de atenção:`}
+            </p>
+            <ul className="text-xs leading-relaxed space-y-1 list-disc pl-5">
+              {errors.map((e, i) => (
+                <li key={i}>{e.message}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Aviso em destaque: dados reais e completos */}
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 flex gap-3">
@@ -573,7 +692,7 @@ export default function CadastroPage() {
             value={form.email}
             onChange={(e) => set('email', e.target.value)}
           />
-          <label className="flex items-start gap-3 cursor-pointer">
+          <label className={`flex items-start gap-3 cursor-pointer p-2 -m-2 rounded-lg ${hasError('confirmedData') ? 'bg-rose-50 ring-1 ring-rose-300' : ''}`}>
             <input
               type="checkbox"
               className="mt-0.5 w-4 h-4 accent-orange-500 flex-shrink-0"
@@ -589,20 +708,20 @@ export default function CadastroPage() {
         {/* Motorista principal */}
         <Card title="Dados do Motorista Principal">
           <div className="grid md:grid-cols-2 gap-3">
-            <input className="input md:col-span-2" placeholder="Nome completo *" value={form.name} onChange={(e) => set('name', e.target.value)} />
-            <input className="input" placeholder="Idade *" value={form.age} onChange={(e) => set('age', e.target.value)} />
+            <input className={errClass('name', 'input md:col-span-2')} placeholder="Nome completo *" value={form.name} onChange={(e) => set('name', e.target.value)} />
+            <input className={errClass('age')} placeholder="Idade *" value={form.age} onChange={(e) => set('age', e.target.value)} />
             <div>
-              <input className="input w-full" placeholder="CPF *" value={form.cpf} onChange={(e) => set('cpf', formatCpf(e.target.value))} />
+              <input className={errClass('cpf', 'input w-full')} placeholder="CPF *" value={form.cpf} onChange={(e) => set('cpf', formatCpf(e.target.value))} />
               {form.cpf.trim() && cpfError(form.cpf) && (
                 <p className="text-[11px] text-rose-500 mt-1">{cpfError(form.cpf)}</p>
               )}
             </div>
             <div>
               <label className="text-xs text-gray-500">Data de nascimento *</label>
-              <input type="date" className="input" value={form.birthDate} onChange={(e) => set('birthDate', e.target.value)} />
+              <input type="date" className={errClass('birthDate')} value={form.birthDate} onChange={(e) => set('birthDate', e.target.value)} />
             </div>
-            <input className="input" placeholder="Profissão *" value={form.job} onChange={(e) => set('job', e.target.value)} />
-            <input className="input md:col-span-2" placeholder="Número de contato (telefone/WhatsApp) *" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
+            <input className={errClass('job')} placeholder="Profissão *" value={form.job} onChange={(e) => set('job', e.target.value)} />
+            <input className={errClass('phone', 'input md:col-span-2')} placeholder="Número de contato (telefone/WhatsApp) *" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
           </div>
         </Card>
 
@@ -613,12 +732,12 @@ export default function CadastroPage() {
               Esta expedição inclui hospedagem internacional. Informe os dados de viagem do motorista principal.
             </p>
             <div className="grid md:grid-cols-2 gap-3">
-              <input className="input" placeholder="Número do passaporte *" value={form.passportNumber} onChange={(e) => set('passportNumber', e.target.value)} />
+              <input className={errClass('passportNumber')} placeholder="Número do passaporte *" value={form.passportNumber} onChange={(e) => set('passportNumber', e.target.value)} />
               <div>
                 <label className="text-xs text-gray-500">Validade do passaporte *</label>
                 <input type="date" className="input" value={form.passportExpiry} onChange={(e) => set('passportExpiry', e.target.value)} />
               </div>
-              <input className="input md:col-span-2" placeholder="Nacionalidade *" value={form.nationality} onChange={(e) => set('nationality', e.target.value)} />
+              <input className={errClass('nationality', 'input md:col-span-2')} placeholder="Nacionalidade *" value={form.nationality} onChange={(e) => set('nationality', e.target.value)} />
             </div>
           </Card>
         )}
@@ -626,47 +745,47 @@ export default function CadastroPage() {
         {/* Endereço */}
         <Card title="Endereço" icon={<MapPin size={15} />}>
           <div className="grid md:grid-cols-2 gap-3">
-            <input className="input md:col-span-2" placeholder="Endereço residencial *" value={form.address} onChange={(e) => set('address', e.target.value)} />
-            <input className="input" placeholder="Número e complemento *" value={form.addressNumber} onChange={(e) => set('addressNumber', e.target.value)} />
+            <input className={errClass('address', 'input md:col-span-2')} placeholder="Endereço residencial *" value={form.address} onChange={(e) => set('address', e.target.value)} />
+            <input className={errClass('addressNumber')} placeholder="Número e complemento *" value={form.addressNumber} onChange={(e) => set('addressNumber', e.target.value)} />
             <input className="input" placeholder="Bairro" value={form.neighborhood} onChange={(e) => set('neighborhood', e.target.value)} />
-            <input className="input" placeholder="Cidade/Estado (ex: Porto Alegre/RS) *" value={form.cityState} onChange={(e) => set('cityState', e.target.value)} />
-            <input className="input" placeholder="CEP *" value={form.cep} onChange={(e) => set('cep', e.target.value)} />
+            <input className={errClass('cityState')} placeholder="Cidade/Estado (ex: Porto Alegre/RS) *" value={form.cityState} onChange={(e) => set('cityState', e.target.value)} />
+            <input className={errClass('cep')} placeholder="CEP *" value={form.cep} onChange={(e) => set('cep', e.target.value)} />
           </div>
         </Card>
 
         {/* Veículo */}
         <Card title="Veículo" icon={<Car size={15} />}>
           <div className="grid md:grid-cols-2 gap-3">
-            <input className="input md:col-span-2" placeholder="Carro — Modelo, Cor, Ano (ex: Jimny, Cinza, 2023) *" value={form.car} onChange={(e) => set('car', e.target.value)} />
-            <input className="input" placeholder="Placa do veículo *" value={form.vehiclePlate} onChange={(e) => set('vehiclePlate', e.target.value.toUpperCase())} />
+            <input className={errClass('car', 'input md:col-span-2')} placeholder="Carro — Modelo, Cor, Ano (ex: Jimny, Cinza, 2023) *" value={form.car} onChange={(e) => set('car', e.target.value)} />
+            <input className={errClass('vehiclePlate')} placeholder="Placa do veículo *" value={form.vehiclePlate} onChange={(e) => set('vehiclePlate', e.target.value.toUpperCase())} />
           </div>
         </Card>
 
         {/* Acompanhante */}
         <Card title="Acompanhante" icon={<Users size={15} />}>
           <div className="grid md:grid-cols-2 gap-3">
-            <input className="input md:col-span-2" placeholder="Nome completo do acompanhante *" value={form.companionName} onChange={(e) => set('companionName', e.target.value)} />
+            <input className={errClass('companionName', 'input md:col-span-2')} placeholder="Nome completo do acompanhante *" value={form.companionName} onChange={(e) => set('companionName', e.target.value)} />
             <div>
-              <input className="input w-full" placeholder="CPF do acompanhante *" value={form.companionCpf} onChange={(e) => set('companionCpf', formatCpf(e.target.value))} />
+              <input className={errClass('companionCpf', 'input w-full')} placeholder="CPF do acompanhante *" value={form.companionCpf} onChange={(e) => set('companionCpf', formatCpf(e.target.value))} />
               {form.companionCpf.trim() && cpfError(form.companionCpf) && (
                 <p className="text-[11px] text-rose-500 mt-1">{cpfError(form.companionCpf)}</p>
               )}
             </div>
-            <input className="input" placeholder="Idade do acompanhante *" value={form.companionAge} onChange={(e) => set('companionAge', e.target.value)} />
+            <input className={errClass('companionAge')} placeholder="Idade do acompanhante *" value={form.companionAge} onChange={(e) => set('companionAge', e.target.value)} />
             <div>
               <label className="text-xs text-gray-500">Data de nascimento do acompanhante *</label>
-              <input type="date" className="input" value={form.companionBirthDate} onChange={(e) => set('companionBirthDate', e.target.value)} />
+              <input type="date" className={errClass('companionBirthDate')} value={form.companionBirthDate} onChange={(e) => set('companionBirthDate', e.target.value)} />
             </div>
-            <input className="input" placeholder="Profissão do acompanhante *" value={form.companionJob} onChange={(e) => set('companionJob', e.target.value)} />
+            <input className={errClass('companionJob')} placeholder="Profissão do acompanhante *" value={form.companionJob} onChange={(e) => set('companionJob', e.target.value)} />
           </div>
           {showInternationalFields && (
             <div className="grid md:grid-cols-2 gap-3 mt-3 pt-3 border-t border-gray-100">
-              <input className="input" placeholder="Passaporte do acompanhante *" value={form.companionPassportNumber} onChange={(e) => set('companionPassportNumber', e.target.value)} />
+              <input className={errClass('companionPassportNumber')} placeholder="Passaporte do acompanhante *" value={form.companionPassportNumber} onChange={(e) => set('companionPassportNumber', e.target.value)} />
               <div>
                 <label className="text-xs text-gray-500">Validade do passaporte *</label>
                 <input type="date" className="input" value={form.companionPassportExpiry} onChange={(e) => set('companionPassportExpiry', e.target.value)} />
               </div>
-              <input className="input md:col-span-2" placeholder="Nacionalidade do acompanhante *" value={form.companionNationality} onChange={(e) => set('companionNationality', e.target.value)} />
+              <input className={errClass('companionNationality', 'input md:col-span-2')} placeholder="Nacionalidade do acompanhante *" value={form.companionNationality} onChange={(e) => set('companionNationality', e.target.value)} />
             </div>
           )}
         </Card>
@@ -674,7 +793,7 @@ export default function CadastroPage() {
         {/* Passageiros adicionais */}
         <Card title="Passageiros Adicionais" icon={<Plus size={15} />}>
           <p className="text-xs text-gray-500 mb-3">Existe passageiro adicional? *</p>
-          <div className="flex gap-6 mb-4">
+          <div className={`flex gap-6 mb-4 p-2 -m-2 rounded-lg ${hasError('hasAdditional') ? 'bg-rose-50 ring-1 ring-rose-300' : ''}`}>
             <label className="flex items-center gap-2 cursor-pointer text-sm font-medium">
               <input type="radio" name="hasAdditional" checked={form.hasAdditional === false} onChange={() => set('hasAdditional', false)} className="accent-orange-500" />
               Não!
@@ -688,26 +807,52 @@ export default function CadastroPage() {
           {form.hasAdditional && (
             <div className="space-y-3 border-t border-gray-100 pt-3">
               {form.additionalPassengers.map((p, i) => (
-                <div key={i} className="bg-gray-50 rounded-lg p-3">
+                <div key={i} className="bg-gray-50 rounded-lg p-3 space-y-2">
                   <div className="flex gap-2 items-center">
                     <input className="input flex-1 bg-white" placeholder={`Passageiro adicional ${i + 1} — nome completo`} value={p.name} onChange={(e) => updatePassenger(i, { name: e.target.value })} />
                     <button onClick={() => removePassenger(i)} className="p-2 hover:bg-rose-50 rounded">
                       <Trash2 size={15} className="text-rose-400" />
                     </button>
                   </div>
-                  <div className="flex items-center gap-4 mt-2 pl-1">
-                    <span className="text-xs text-gray-500">Esse passageiro é filho(a)?</span>
-                    <label className="flex items-center gap-1.5 cursor-pointer text-xs font-medium">
-                      <input type="radio" name={`child-${i}`} checked={!p.isChild} onChange={() => updatePassenger(i, { isChild: false })} className="accent-orange-500" />
-                      Não
-                    </label>
-                    <label className="flex items-center gap-1.5 cursor-pointer text-xs font-medium">
-                      <input type="radio" name={`child-${i}`} checked={p.isChild} onChange={() => updatePassenger(i, { isChild: true })} className="accent-orange-500" />
-                      Sim, é filho(a)
-                    </label>
+                  <div className="grid md:grid-cols-2 gap-2">
+                    <select
+                      className="input bg-white"
+                      value={p.relation}
+                      onChange={(e) => updatePassenger(i, { relation: e.target.value as PassengerRelation })}
+                    >
+                      {PASSENGER_RELATION_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <div>
+                      <input
+                        className={errClass(`passenger-${i}-cpf`, 'input bg-white w-full')}
+                        placeholder="CPF *"
+                        value={p.cpf}
+                        onChange={(e) => updatePassenger(i, { cpf: formatCpf(e.target.value) })}
+                      />
+                      {p.cpf.trim() && cpfError(p.cpf) && (
+                        <p className="text-[11px] text-rose-500 mt-1">{cpfError(p.cpf)}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">Data de nascimento *</label>
+                      <input
+                        type="date"
+                        className={errClass(`passenger-${i}-birthDate`, 'input bg-white')}
+                        value={p.birthDate}
+                        onChange={(e) => updatePassenger(i, { birthDate: e.target.value })}
+                      />
+                    </div>
+                    <input
+                      className={errClass(`passenger-${i}-job`, 'input bg-white')}
+                      placeholder="Profissão *"
+                      value={p.job}
+                      onChange={(e) => updatePassenger(i, { job: e.target.value })}
+                    />
                   </div>
                   {showInternationalFields && (
-                    <input className="input bg-white mt-2" placeholder="Passaporte" value={p.passport} onChange={(e) => updatePassenger(i, { passport: e.target.value })} />
+                    <input className="input bg-white" placeholder="Passaporte" value={p.passport} onChange={(e) => updatePassenger(i, { passport: e.target.value })} />
                   )}
                 </div>
               ))}
@@ -722,19 +867,36 @@ export default function CadastroPage() {
 
         {/* Pet */}
         <Card title="Pet">
-          <input className="input" placeholder="Vai levar pet? Informe raça, porte e nome (deixe em branco se não)" value={form.petInfo} onChange={(e) => set('petInfo', e.target.value)} />
+          <p className="text-xs text-gray-500 mb-3">Vai levar pet? *</p>
+          <div className={`flex gap-6 mb-3 p-2 -m-2 rounded-lg ${hasError('hasPet') ? 'bg-rose-50 ring-1 ring-rose-300' : ''}`}>
+            <label className="flex items-center gap-2 cursor-pointer text-sm font-medium">
+              <input type="radio" name="hasPet" checked={form.hasPet === false} onChange={() => set('hasPet', false)} className="accent-orange-500" />
+              Não!
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer text-sm font-medium">
+              <input type="radio" name="hasPet" checked={form.hasPet === true} onChange={() => set('hasPet', true)} className="accent-orange-500" />
+              Sim!
+            </label>
+          </div>
+          {form.hasPet && (
+            <div className="grid md:grid-cols-2 gap-3 border-t border-gray-100 pt-3">
+              <input className={errClass('petName')} placeholder="Nome do pet *" value={form.petName} onChange={(e) => set('petName', e.target.value)} />
+              <input className={errClass('petWeight')} placeholder="Peso do pet (kg) *" value={form.petWeight} onChange={(e) => set('petWeight', e.target.value)} />
+              <input className="input md:col-span-2" placeholder="Raça/porte (opcional)" value={form.petInfo} onChange={(e) => set('petInfo', e.target.value)} />
+            </div>
+          )}
         </Card>
 
         {/* Emergência */}
         <Card title="Contato de Emergência" icon={<Phone size={15} />}>
-          <input className="input" placeholder="Nome e número de contato para emergência *" value={form.emergencyContact} onChange={(e) => set('emergencyContact', e.target.value)} />
+          <input className={errClass('emergencyContact')} placeholder="Nome e número de contato para emergência *" value={form.emergencyContact} onChange={(e) => set('emergencyContact', e.target.value)} />
         </Card>
 
         {/* Configuração do Quarto — Feature 3: Hotel Dinâmico, só aparece com fornecedor Hotel */}
         {showHotelFields && (
           <Card title="Configuração do Quarto" icon={<BedDouble size={15} />}>
             <p className="text-xs text-gray-500 mb-3">Selecione a opção que melhor atende sua necessidade *</p>
-            <div className="space-y-2">
+            <div className={`space-y-2 p-2 -m-2 rounded-lg ${hasError('roomConfig') ? 'bg-rose-50 ring-1 ring-rose-300' : ''}`}>
               {ROOM_OPTIONS.map((opt) => (
                 <label key={opt} className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-gray-50 transition-colors">
                   <input type="radio" name="roomConfig" value={opt} checked={form.roomConfig === opt} onChange={() => set('roomConfig', opt)} className="accent-orange-500 w-4 h-4" />
@@ -758,6 +920,7 @@ export default function CadastroPage() {
               value={form.driverShirtSize}
               onChange={(v) => set('driverShirtSize', v)}
               required
+              error={hasError('driverShirtSize')}
             />
             {form.companionName.trim() && (
               <ShirtPersonRow
@@ -772,7 +935,7 @@ export default function CadastroPage() {
                 <ShirtPersonRow
                   key={i}
                   name={p.name}
-                  isChild={p.isChild}
+                  isChild={isChildPassenger(p)}
                   value={p.shirtSize}
                   onChange={(v) => updatePassenger(i, { shirtSize: v })}
                 />
@@ -823,7 +986,7 @@ export default function CadastroPage() {
         </div>
 
         {/* Responsabilidade de dados */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <div className={`bg-white rounded-xl border shadow-sm p-5 ${hasError('confirmedResponsibility') ? 'border-rose-300 ring-1 ring-rose-300' : 'border-gray-100'}`}>
           <label className="flex items-start gap-3 cursor-pointer">
             <input type="checkbox" className="mt-0.5 w-4 h-4 accent-orange-500 flex-shrink-0" checked={form.confirmedResponsibility} onChange={(e) => set('confirmedResponsibility', e.target.checked)} />
             <span className="text-sm text-gray-700">
@@ -868,16 +1031,17 @@ function Card({ title, icon, children }: { title: string; icon?: React.ReactNode
 
 // ───────────────────────── Seletor de camiseta por pessoa ────────────────────
 function ShirtPersonRow({
-  name, isChild, value, onChange, required,
+  name, isChild, value, onChange, required, error,
 }: {
   name: string;
   isChild: boolean;
   value: string;
   onChange: (v: string) => void;
   required?: boolean;
+  error?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2.5">
+    <div className={`flex items-center gap-3 rounded-lg px-3 py-2.5 ${error ? 'bg-rose-50 ring-1 ring-rose-300' : 'bg-gray-50'}`}>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-800 truncate">
           {name}
@@ -897,8 +1061,8 @@ function ShirtPersonRow({
           ))}
         </optgroup>
         <optgroup label="Infantil">
-          {['Infantil 02', 'Infantil 04', 'Infantil 06', 'Infantil 08', 'Infantil 10', 'Infantil 12', 'Infantil 14'].map((s) => (
-            <option key={s} value={s}>{s.replace('Infantil ', 'Inf. ')}</option>
+          {['2', '4', '6', '8', '10', '12', '14'].map((s) => (
+            <option key={s} value={`Infantil ${s}`}>{`Inf. ${s}`}</option>
           ))}
         </optgroup>
         <option value="Outro">Outro</option>
@@ -968,12 +1132,14 @@ function ShirtSizeTable() {
 // ───────────────────────── Assinatura do termo (Feature 1) ───────────────────
 function SignatureStep({
   term,
+  signCity,
   signerName,
   expeditionName,
   signing,
   onSign,
 }: {
   term: TermInfo | null;
+  signCity?: string;
   signerName: string;
   expeditionName?: string;
   signing: boolean;
@@ -1066,9 +1232,9 @@ function SignatureStep({
           </h2>
           <div className="max-h-[55vh] overflow-y-auto pr-2 text-[13px] leading-relaxed text-gray-700 whitespace-pre-line border border-gray-100 rounded-lg p-4 bg-gray-50">
             {term ? term.text : 'Carregando termo...'}
-            {term?.signCity && (
+            {signCity && (
               <p className="mt-4 font-medium text-gray-800">
-                {formatSignLine(term.signCity)}
+                {formatSignLine(signCity)}
               </p>
             )}
           </div>

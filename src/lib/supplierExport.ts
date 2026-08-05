@@ -21,6 +21,9 @@ const RELATION_LABEL: Record<string, string> = {
   conjuge: 'Cônjuge',
   filho: 'Filho(a)',
   filha: 'Filha',
+  pai: 'Pai',
+  mae: 'Mãe',
+  amigo: 'Amigo(a)',
   outro: 'Acompanhante',
 };
 

@@ -1,6 +1,6 @@
 import { createCollection, type BaseRecord } from './jsonCollection';
 
-export type FamilyRelation = 'conjuge' | 'filho' | 'filha' | 'outro';
+export type FamilyRelation = 'conjuge' | 'filho' | 'filha' | 'pai' | 'mae' | 'amigo' | 'outro';
 
 // Categoria de preço/tarifário (ingressos do fornecedor). Quando ausente,
 // o sistema deduz por idade (criança/idoso pela faixa do fornecedor; senão adulto).
