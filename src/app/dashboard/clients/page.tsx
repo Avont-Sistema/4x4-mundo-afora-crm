@@ -12,6 +12,12 @@ interface LastExpedition {
   isLive: boolean;
 }
 
+interface FamilyMember {
+  id?: string;
+  name: string;
+  relation: string;
+}
+
 interface Client {
   id: string;
   name: string;
@@ -21,11 +27,21 @@ interface Client {
   state?: string;
   job?: string;
   company?: string;
-  family: any[];
+  family: FamilyMember[];
   vehicle?: { model?: string };
   lastExpedition?: LastExpedition | null;
   expeditionIds?: string[];
 }
+
+const FAMILY_RELATION_LABELS: Record<string, string> = {
+  conjuge: 'Cônjuge',
+  filho: 'Filho',
+  filha: 'Filha',
+  pai: 'Pai',
+  mae: 'Mãe',
+  amigo: 'Amigo(a)',
+  outro: 'Acompanhante',
+};
 
 interface ExpeditionOption {
   id: string;
@@ -155,17 +171,25 @@ export default function ClientsPage() {
                       <Briefcase size={11} /> {c.job}
                     </span>
                   )}
-                  {c.family?.length > 0 && (
-                    <span className="flex items-center gap-1">
-                      <Users size={11} /> {c.family.length} familiar(es)
-                    </span>
-                  )}
                   {c.vehicle?.model && (
                     <span className="flex items-center gap-1">
                       <Car size={11} /> {c.vehicle.model}
                     </span>
                   )}
                 </div>
+                {c.family?.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                    <Users size={11} className="text-gray-400" />
+                    {c.family.map((m, i) => (
+                      <span
+                        key={m.id || i}
+                        className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600"
+                      >
+                        {FAMILY_RELATION_LABELS[m.relation] || 'Acompanhante'}: {m.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <ChevronRight size={20} className="text-gray-300 flex-shrink-0" />
             </button>

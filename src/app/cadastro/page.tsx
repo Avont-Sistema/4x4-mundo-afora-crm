@@ -47,6 +47,17 @@ const PASSENGER_RELATION_OPTIONS: { value: PassengerRelation; label: string }[] 
   { value: 'outro', label: 'Outro' },
 ];
 
+type CompanionRelation = 'conjuge' | 'filho' | 'pai' | 'mae' | 'amigo' | 'outro';
+
+const COMPANION_RELATION_OPTIONS: { value: CompanionRelation; label: string }[] = [
+  { value: 'conjuge', label: 'Cônjuge' },
+  { value: 'filho', label: 'Filho(a)' },
+  { value: 'pai', label: 'Pai' },
+  { value: 'mae', label: 'Mãe' },
+  { value: 'amigo', label: 'Amigo(a)' },
+  { value: 'outro', label: 'Outro' },
+];
+
 interface Passenger {
   name: string;
   relation: PassengerRelation;
@@ -99,6 +110,7 @@ interface FormData {
   car: string;
   vehiclePlate: string;
   companionName: string;
+  companionRelation: CompanionRelation;
   companionCpf: string;
   companionAge: string;
   companionBirthDate: string;
@@ -141,6 +153,7 @@ const emptyForm: FormData = {
   car: '',
   vehiclePlate: '',
   companionName: '',
+  companionRelation: 'conjuge',
   companionCpf: '',
   companionAge: '',
   companionBirthDate: '',
@@ -379,11 +392,11 @@ export default function CadastroPage() {
       if (form.companionName.trim()) {
         family.push({
           name: form.companionName,
-          relation: 'outro',
+          relation: form.companionRelation,
           birthDate: form.companionBirthDate || undefined,
           document: form.companionCpf || undefined,
           job: form.companionJob || undefined,
-          isChild: false,
+          isChild: form.companionRelation === 'filho',
           shirtSize: form.companionShirtSize || undefined,
           passportNumber: form.companionPassportNumber || undefined,
           passportExpiry: form.companionPassportExpiry || undefined,
@@ -765,6 +778,18 @@ export default function CadastroPage() {
         <Card title="Acompanhante" icon={<Users size={15} />}>
           <div className="grid md:grid-cols-2 gap-3">
             <input className={errClass('companionName', 'input md:col-span-2')} placeholder="Nome completo do acompanhante *" value={form.companionName} onChange={(e) => set('companionName', e.target.value)} />
+            <div className="md:col-span-2">
+              <label className="text-xs text-gray-500">Qual o parentesco? *</label>
+              <select
+                className="input"
+                value={form.companionRelation}
+                onChange={(e) => set('companionRelation', e.target.value as CompanionRelation)}
+              >
+                {COMPANION_RELATION_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
             <div>
               <input className={errClass('companionCpf', 'input w-full')} placeholder="CPF do acompanhante *" value={form.companionCpf} onChange={(e) => set('companionCpf', formatCpf(e.target.value))} />
               {form.companionCpf.trim() && cpfError(form.companionCpf) && (
