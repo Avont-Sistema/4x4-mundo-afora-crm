@@ -462,11 +462,14 @@ app.post('/api/send', auth, async (req, res) => {
     let conv = conversations.get(phone);
     const quotedMsg = conv?.lastReceivedMsg;
 
-    // Conversa conhecida ou @lid: usa o JID mapeado (com quoted para garantir entrega).
-    // Número desconhecido: valida via onWhatsApp — enviar para JID inexistente não
-    // lança erro, a mensagem só não chega. Melhor falhar aqui com erro claro.
+    // @lid: usa o JID mapeado diretamente (não dá pra validar via onWhatsApp).
+    // Qualquer outro número: SEMPRE valida via onWhatsApp, mesmo com conversa
+    // conhecida — o atalho antigo (pular a validação quando já havia
+    // quotedMsg) fazia o WhatsApp aceitar o envio sem erro, mas a mensagem
+    // nunca chegava. O quotedMsg continua sendo usado só para responder
+    // citando a última mensagem (ver abaixo), não para decidir o JID.
     let sendJid;
-    if (phone.includes('@lid') || quotedMsg) {
+    if (phone.includes('@lid')) {
       sendJid = resolveSendJid(phone);
     } else {
       const resolved = await resolveDeliverableJid(phone);

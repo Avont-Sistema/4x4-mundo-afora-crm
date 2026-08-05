@@ -5,6 +5,7 @@ import {
   type CreateLeadInput,
 } from '@/lib/leadsStore';
 import { resolve } from '@/lib/integrationsStore';
+import { notifyNewLead } from '@/lib/leadNotify';
 
 /**
  * Webhook unificado de captação de leads.
@@ -112,6 +113,12 @@ export async function POST(request: NextRequest) {
       value: data.value,
       notes: `Lead captado via ${source}`,
     });
+
+    // Avisa Diego/Michele no WhatsApp só quando o lead é novo de fato (evita
+    // notificar de novo em atualizações de um contato já existente).
+    if (created) {
+      void notifyNewLead(lead).catch(() => {});
+    }
 
     return NextResponse.json(
       { success: true, created, lead },
