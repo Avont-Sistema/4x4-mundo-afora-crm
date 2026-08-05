@@ -2,9 +2,15 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, Users, Car, Briefcase, ChevronRight, MapPin } from 'lucide-react';
+import { Plus, Search, Users, Car, Briefcase, ChevronRight, MapPin, Mountain } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ClientForm from './ClientForm';
+
+interface LastExpedition {
+  id: string;
+  name: string;
+  isLive: boolean;
+}
 
 interface Client {
   id: string;
@@ -17,13 +23,22 @@ interface Client {
   company?: string;
   family: any[];
   vehicle?: { model?: string };
+  lastExpedition?: LastExpedition | null;
+  expeditionIds?: string[];
+}
+
+interface ExpeditionOption {
+  id: string;
+  routeName: string;
 }
 
 export default function ClientsPage() {
   const router = useRouter();
   const [clients, setClients] = useState<Client[]>([]);
+  const [expeditions, setExpeditions] = useState<ExpeditionOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [expeditionFilter, setExpeditionFilter] = useState('');
   const [showForm, setShowForm] = useState(false);
 
   const fetchClients = useCallback(async () => {
@@ -41,13 +56,18 @@ export default function ClientsPage() {
 
   useEffect(() => {
     fetchClients();
+    fetch('/api/expeditions')
+      .then((r) => r.json())
+      .then((d) => setExpeditions(d.expeditions || []))
+      .catch(() => {});
   }, [fetchClients]);
 
   const filtered = clients.filter(
     (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      (c.email || '').toLowerCase().includes(search.toLowerCase()) ||
-      (c.phone || '').includes(search)
+      (c.name.toLowerCase().includes(search.toLowerCase()) ||
+        (c.email || '').toLowerCase().includes(search.toLowerCase()) ||
+        (c.phone || '').includes(search)) &&
+      (!expeditionFilter || (c.expeditionIds || []).includes(expeditionFilter))
   );
 
   return (
@@ -55,21 +75,35 @@ export default function ClientsPage() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-4xl font-bold">Clientes</h1>
-          <p className="text-gray-500 text-sm mt-1">{clients.length} clientes — clique para abrir o perfil completo</p>
+          <p className="text-gray-500 text-sm mt-1">
+            {filtered.length === clients.length ? `${clients.length} clientes` : `${filtered.length} de ${clients.length} clientes`} — clique para abrir o perfil completo
+          </p>
         </div>
         <button onClick={() => setShowForm(true)} className="btn btn-primary flex items-center gap-2">
           <Plus size={20} /> Novo Cliente
         </button>
       </div>
 
-      <div className="mb-6 relative">
-        <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-        <input
-          className="input pl-10"
-          placeholder="Buscar por nome, email ou telefone..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="mb-6 flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+          <input
+            className="input pl-10"
+            placeholder="Buscar por nome, email ou telefone..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <select
+          className="input sm:w-64"
+          value={expeditionFilter}
+          onChange={(e) => setExpeditionFilter(e.target.value)}
+        >
+          <option value="">Todas as expedições</option>
+          {expeditions.map((exp) => (
+            <option key={exp.id} value={exp.id}>{exp.routeName}</option>
+          ))}
+        </select>
       </div>
 
       {loading ? (
@@ -86,7 +120,28 @@ export default function ClientsPage() {
                 {c.name.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold">{c.name}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-semibold">{c.name}</p>
+                  {c.lastExpedition && (
+                    <span
+                      className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                        c.lastExpedition.isLive
+                          ? 'bg-rose-50 text-rose-700'
+                          : 'bg-amber-50 text-amber-700'
+                      }`}
+                    >
+                      {c.lastExpedition.isLive ? (
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
+                        </span>
+                      ) : (
+                        <Mountain size={11} />
+                      )}
+                      {c.lastExpedition.name}
+                    </span>
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-500 mt-0.5">
                   {c.phone && <span>{c.phone}</span>}
                   {(c.city || c.state) && (
