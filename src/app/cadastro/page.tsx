@@ -23,20 +23,6 @@ const ROOM_OPTIONS = [
   'Outro',
 ];
 
-// Tabela de medidas (cm) — dados oficiais 4x4 Mundo Afora (Dry Fit)
-const SHIRT_TABLE_ADULT = {
-  sizes: ['PP', 'P', 'M', 'G', 'GG', 'XG', 'G1', 'G2', 'G3'],
-  torax: [49, 52, 54, 58, 62, 64, 67, 69, 71],
-  comprimento: [69, 72, 74, 76, 80, 80, 82, 84, 85],
-  manga: [17, 18, 20, 22, 24, 25, 25, 25, 25],
-};
-const SHIRT_TABLE_INFANTIL = {
-  sizes: ['2', '4', '6', '8', '10', '12', '14'],
-  torax: [34, 36, 38, 40, 42, 44, 46],
-  comprimento: [41, 44, 48, 52, 55, 59, 63],
-  manga: [9, 10, 11, 13, 14, 15, 16],
-};
-
 type PassengerRelation = 'filho' | 'pai' | 'mae' | 'amigo' | 'outro';
 
 const PASSENGER_RELATION_OPTIONS: { value: PassengerRelation; label: string }[] = [
@@ -1086,7 +1072,7 @@ function ShirtPersonRow({
           ))}
         </optgroup>
         <optgroup label="Infantil">
-          {['2', '4', '6', '8', '10', '12', '14'].map((s) => (
+          {['2', '4', '6', '8', '10', '12', '14', '16'].map((s) => (
             <option key={s} value={`Infantil ${s}`}>{`Inf. ${s}`}</option>
           ))}
         </optgroup>
@@ -1099,34 +1085,6 @@ function ShirtPersonRow({
 // ───────────────────────── Tabela de medidas (Feature 5) ─────────────────────
 function ShirtSizeTable() {
   const [open, setOpen] = useState(false);
-  const renderTable = (
-    title: string,
-    data: { sizes: string[]; torax: number[]; comprimento: number[]; manga: number[] }
-  ) => (
-    <div className="mb-3">
-      <p className="text-[11px] font-bold text-gray-600 uppercase tracking-wide mb-1">{title}</p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-center text-[11px] border-collapse">
-          <thead>
-            <tr className="bg-gray-900 text-white">
-              <th className="px-2 py-1 text-left font-semibold rounded-l">Medida (cm)</th>
-              {data.sizes.map((s) => (<th key={s} className="px-2 py-1 font-semibold">{s}</th>))}
-            </tr>
-          </thead>
-          <tbody>
-            {([['Tórax (A)', data.torax], ['Comprimento (B)', data.comprimento], ['Manga (C)', data.manga]] as const).map(
-              ([label, vals], idx) => (
-                <tr key={label} className={idx % 2 ? 'bg-gray-50' : 'bg-white'}>
-                  <td className="px-2 py-1 text-left font-medium text-gray-600 whitespace-nowrap">{label}</td>
-                  {vals.map((v, i) => (<td key={i} className="px-2 py-1 text-gray-700">{v}</td>))}
-                </tr>
-              )
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
 
   return (
     <div className="mb-4 border border-gray-200 rounded-lg overflow-hidden">
@@ -1140,14 +1098,12 @@ function ShirtSizeTable() {
       </button>
       {open && (
         <div className="p-3">
-          {renderTable('Tradicional', SHIRT_TABLE_ADULT)}
-          {renderTable('Infantil', SHIRT_TABLE_INFANTIL)}
-          <div className="text-[10px] text-gray-500 leading-relaxed mt-1 space-y-0.5">
-            <p><strong>Tórax (A):</strong> medida em linha reta, de uma axila à outra.</p>
-            <p><strong>Comprimento (B):</strong> da costura do ombro até a barra inferior.</p>
-            <p><strong>Manga (C):</strong> comprimento da manga.</p>
-            <p className="text-orange-600">Obs.: para camisetas mais justas (Baby look), a Tradicional PP equivale à Baby look GG.</p>
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/tabela-medidas-camisetas.jpg"
+            alt="Tabela de medidas de camisetas Dry Fit — 4x4 Mundo Afora"
+            className="w-full rounded-lg border border-gray-100"
+          />
         </div>
       )}
     </div>

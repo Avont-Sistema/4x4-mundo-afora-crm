@@ -240,10 +240,23 @@ export async function POST(request: NextRequest) {
           void notifyOwners(
             `📋 *Nova inscrição pelo formulário!*\n${client.name} → ${exp.routeName}\n` +
             `${adults} adulto(s)${children ? ` + ${children} criança(s)` : ''}` +
+            (merged ? '' : '\n🆕 Cliente novo') +
             (client.phone ? `\n📞 ${client.phone}` : '')
           );
         }
       }
+    }
+
+    // Cliente novo que preencheu o formulário sem estar vinculado a uma
+    // expedição (ou a expedição do link não foi encontrada) — avisa mesmo
+    // assim, para não perder o cadastro. Se já foi notificado acima (inscrição
+    // com matrícula), não duplica o aviso.
+    if (!merged && !enrolled) {
+      const { notifyOwners } = await import('@/lib/notify');
+      void notifyOwners(
+        `🆕 *Novo cadastro pelo formulário!*\n${client.name}` +
+        (client.phone ? `\n📞 ${client.phone}` : '')
+      );
     }
 
     return NextResponse.json(

@@ -30,7 +30,7 @@ const DEFAULTS: Settings = {
   businessHoursEnabled: false,
   typingDelaySeconds: 2,
   diegoPhone: '',
-  michellePhone: '',
+  michellePhone: '+5547992195320',
   businessHours: [
     { day: 1, open: '08:00', close: '18:00', enabled: true },
     { day: 2, open: '08:00', close: '18:00', enabled: true },
