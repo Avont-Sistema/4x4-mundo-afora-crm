@@ -22,6 +22,15 @@ export async function PATCH(
     if (body.agreedPrice !== undefined) enr.agreedPrice = Number(body.agreedPrice);
     if (body.adults !== undefined) enr.adults = Number(body.adults);
     if (body.children !== undefined) enr.children = Number(body.children);
+    if (body.composition !== undefined) {
+      enr.composition = {
+        carType: body.composition.carType,
+        secondCoupleSeparateSuite: Boolean(body.composition.secondCoupleSeparateSuite),
+        extraChildUpTo5: Number(body.composition.extraChildUpTo5) || 0,
+        extraChild5to10: Number(body.composition.extraChild5to10) || 0,
+        extraAbove10: Number(body.composition.extraAbove10) || 0,
+      };
+    }
     enr.updatedAt = new Date().toISOString();
     await expeditionsStore.touch(exp.id);
     return NextResponse.json({ expedition: await buildExpeditionDetail(exp) });

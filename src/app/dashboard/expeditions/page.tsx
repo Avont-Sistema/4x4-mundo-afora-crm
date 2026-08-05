@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Plus, MapPin, Users, X, TrendingUp, RefreshCw } from 'lucide-react';
+import { Plus, MapPin, Users, X, TrendingUp, RefreshCw, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatBRL, formatDate } from '@/lib/format';
 
@@ -24,10 +24,15 @@ interface Expedition {
   startDate?: string;
   endDate?: string;
   slots: number;
-  pricePerPerson: number;
-  pricePerChild: number;
+  priceSingle: number;
+  priceCouple: number;
+  priceChildUpTo5: number;
+  priceChild5to10: number;
+  priceAbove10: number;
+  priceSecondCoupleSuite: number;
   revenueGoal: number;
   status: string;
+  enrollments: { clientName: string }[];
   finance: Finance;
 }
 
@@ -37,6 +42,7 @@ const statusColors: Record<string, string> = {
   em_andamento: 'bg-amber-100 text-amber-700',
   fechada: 'bg-emerald-100 text-emerald-700',
   finalizada: 'bg-purple-100 text-purple-700',
+  cancelada: 'bg-rose-100 text-rose-700',
 };
 const statusLabels: Record<string, string> = {
   planejamento: 'Planejamento',
@@ -44,6 +50,7 @@ const statusLabels: Record<string, string> = {
   em_andamento: 'Em Andamento',
   fechada: 'Fechada',
   finalizada: 'Finalizada',
+  cancelada: 'Cancelada',
 };
 
 const emptyForm = {
@@ -54,8 +61,12 @@ const emptyForm = {
   startDate: '',
   endDate: '',
   slots: 12,
-  pricePerPerson: 0,
-  pricePerChild: 0,
+  priceSingle: 0,
+  priceCouple: 0,
+  priceChildUpTo5: 0,
+  priceChild5to10: 0,
+  priceAbove10: 0,
+  priceSecondCoupleSuite: 0,
   revenueGoal: 0,
   status: 'planejamento',
 };
@@ -65,6 +76,8 @@ export default function ExpeditionsPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
 
   const fetchExpeditions = useCallback(async () => {
     setLoading(true);
@@ -108,13 +121,23 @@ export default function ExpeditionsPage() {
     }
   };
 
+  const filtered = expeditions.filter((exp) => {
+    const statusMatch = !statusFilter || exp.status === statusFilter;
+    const search = clientSearch.trim().toLowerCase();
+    const clientMatch =
+      !search || (exp.enrollments || []).some((e) => e.clientName.toLowerCase().includes(search));
+    return statusMatch && clientMatch;
+  });
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-4xl font-bold">Expedições</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Projetos com faturamento, custos, lucro e clientes
+            {filtered.length === expeditions.length
+              ? `${expeditions.length} projetos`
+              : `${filtered.length} de ${expeditions.length} projetos`} — faturamento, custos, lucro e clientes
           </p>
         </div>
         <div className="flex gap-2">
@@ -127,6 +150,28 @@ export default function ExpeditionsPage() {
         </div>
       </div>
 
+      <div className="mb-6 flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+          <input
+            className="input pl-10"
+            placeholder="Buscar por cliente matriculado..."
+            value={clientSearch}
+            onChange={(e) => setClientSearch(e.target.value)}
+          />
+        </div>
+        <select
+          className="input sm:w-56"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+        >
+          <option value="">Todos os status</option>
+          {Object.entries(statusLabels).map(([k, label]) => (
+            <option key={k} value={k}>{label}</option>
+          ))}
+        </select>
+      </div>
+
       {loading ? (
         <div className="text-center py-20 text-gray-500">
           <RefreshCw className="w-8 h-8 mx-auto mb-3 animate-spin" />
@@ -134,8 +179,12 @@ export default function ExpeditionsPage() {
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {expeditions.map((exp) => {
+          {filtered.map((exp) => {
             const f = exp.finance;
+            const search = clientSearch.trim().toLowerCase();
+            const matchedClients = search
+              ? (exp.enrollments || []).filter((e) => e.clientName.toLowerCase().includes(search))
+              : [];
             return (
               <Link
                 key={exp.id}
@@ -165,6 +214,11 @@ export default function ExpeditionsPage() {
                   {exp.startDate && (
                     <p className="text-xs">
                       {formatDate(exp.startDate)} – {formatDate(exp.endDate)}
+                    </p>
+                  )}
+                  {matchedClients.length > 0 && (
+                    <p className="text-xs text-amber-600 font-medium">
+                      ✓ {matchedClients.map((c) => c.clientName).join(', ')}
                     </p>
                   )}
                 </div>
@@ -203,10 +257,14 @@ export default function ExpeditionsPage() {
             );
           })}
 
-          {expeditions.length === 0 && (
+          {filtered.length === 0 && (
             <div className="col-span-full text-center py-16 text-gray-400">
               <MapPin size={48} className="mx-auto mb-4 opacity-40" />
-              <p>Nenhuma expedição. Crie a primeira!</p>
+              <p>
+                {expeditions.length === 0
+                  ? 'Nenhuma expedição. Crie a primeira!'
+                  : 'Nenhuma expedição encontrada com esse filtro.'}
+              </p>
             </div>
           )}
         </div>
@@ -294,23 +352,48 @@ export default function ExpeditionsPage() {
                     onChange={(e) => setForm({ ...form, revenueGoal: Number(e.target.value) })}
                   />
                 </div>
-                <div>
-                  <label className="text-xs text-gray-500">Preço sugerido por adulto (R$)</label>
-                  <input
-                    type="number"
-                    className="input"
-                    value={form.pricePerPerson}
-                    onChange={(e) => setForm({ ...form, pricePerPerson: Number(e.target.value) })}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500">Preço sugerido por criança (R$)</label>
-                  <input
-                    type="number"
-                    className="input"
-                    value={form.pricePerChild}
-                    onChange={(e) => setForm({ ...form, pricePerChild: Number(e.target.value) })}
-                  />
+              </div>
+
+              {/* Tabela de preços por carro */}
+              <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 mt-4">
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                  Tabela de preços por carro
+                </label>
+                <p className="text-[11px] text-gray-400 mb-2">
+                  O faturamento real vem da soma do que cada carro pagar na matrícula, calculado
+                  a partir desses valores — não é um preço por pessoa fixo.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500">Single (individual)</label>
+                    <input type="number" className="input" value={form.priceSingle}
+                      onChange={(e) => setForm({ ...form, priceSingle: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Casal / Dupla</label>
+                    <input type="number" className="input" value={form.priceCouple}
+                      onChange={(e) => setForm({ ...form, priceCouple: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Passageiro adicional até 5 anos</label>
+                    <input type="number" className="input" value={form.priceChildUpTo5}
+                      onChange={(e) => setForm({ ...form, priceChildUpTo5: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Passageiro adicional de 5 a 10 anos</label>
+                    <input type="number" className="input" value={form.priceChild5to10}
+                      onChange={(e) => setForm({ ...form, priceChild5to10: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Passageiro adicional acima de 10 anos</label>
+                    <input type="number" className="input" value={form.priceAbove10}
+                      onChange={(e) => setForm({ ...form, priceAbove10: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Adicional 2º casal no carro + suíte separada</label>
+                    <input type="number" className="input" value={form.priceSecondCoupleSuite}
+                      onChange={(e) => setForm({ ...form, priceSecondCoupleSuite: Number(e.target.value) })} />
+                  </div>
                 </div>
               </div>
 
@@ -321,10 +404,9 @@ export default function ExpeditionsPage() {
                   {form.revenueGoal > 0 ? (
                     <>Meta de faturamento: <strong>{formatBRL(form.revenueGoal)}</strong>.{' '}</>
                   ) : null}
-                  Cada vaga é um <strong>carro</strong> ({form.slots} carros) e cada carro leva
-                  quantos acompanhantes quiser. O preço é negociado por carro na matrícula, então
-                  o faturamento real é a soma desses valores — os preços por pessoa acima são apenas
-                  uma sugestão.
+                  Cada vaga é um <strong>carro</strong> ({form.slots} carros). O preço de cada
+                  matrícula é calculado a partir da composição real do carro (single/casal +
+                  passageiros adicionais por idade), então o faturamento é a soma desses valores.
                 </span>
               </div>
 

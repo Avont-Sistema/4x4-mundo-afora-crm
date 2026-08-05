@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isBotAuthed } from '@/lib/botAuth';
-import { expeditionsStore, enrollClient } from '@/lib/expeditionsStore';
+import { expeditionsStore, enrollClient, compositionFromCounts } from '@/lib/expeditionsStore';
 import { clientsStore } from '@/lib/clientsStore';
 
 export async function POST(request: NextRequest) {
@@ -18,6 +18,9 @@ export async function POST(request: NextRequest) {
   if (!exp)    return NextResponse.json({ error: 'Expedição não encontrada' }, { status: 404 });
   if (!client) return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
 
-  const result = await enrollClient(exp, client, { adults, children, observations });
+  const result = await enrollClient(exp, client, {
+    composition: compositionFromCounts(adults, children),
+    observations,
+  });
   return NextResponse.json(result);
 }

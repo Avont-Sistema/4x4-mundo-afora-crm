@@ -6,7 +6,7 @@ import {
   type BillingType,
 } from './asaas';
 import { buildPixPayload } from './pix';
-import { expeditionsStore } from '@/lib/expeditionsStore';
+import { expeditionsStore, compositionFromCounts } from '@/lib/expeditionsStore';
 import { clientsStore } from '@/lib/clientsStore';
 import { upsertLeadFromContact } from '@/lib/leadsStore';
 import { resolve } from '@/lib/integrationsStore';
@@ -162,6 +162,7 @@ export async function recordConfirmedPayment(
         clientName: client.name,
         adults: 1,
         children: 0,
+        composition: compositionFromCounts(1, 0),
         agreedPrice: amount,
         payments: [],
         observations: 'Matriculado via pagamento confirmado (Asaas)',

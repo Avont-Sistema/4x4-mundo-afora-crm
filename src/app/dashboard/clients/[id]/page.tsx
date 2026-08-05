@@ -55,8 +55,10 @@ const howFoundLabel: Record<string, string> = {
 const expStatusColor: Record<string, string> = {
   aberta: 'bg-yellow-100 text-amber-700',
   em_andamento: 'bg-emerald-100 text-emerald-700',
+  fechada: 'bg-emerald-100 text-emerald-700',
   finalizada: 'bg-purple-100 text-purple-700',
   planejamento: 'bg-gray-100 text-gray-600',
+  cancelada: 'bg-rose-100 text-rose-700',
 };
 
 export default function ClientDetailPage() {

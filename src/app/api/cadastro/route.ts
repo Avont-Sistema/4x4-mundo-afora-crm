@@ -3,10 +3,11 @@ import {
   clientsStore,
   findClientByIdentity,
   mergeFamily,
+  ageFrom,
   type Client,
   type FamilyMember,
 } from '@/lib/clientsStore';
-import { expeditionsStore, enrollClient } from '@/lib/expeditionsStore';
+import { expeditionsStore, enrollClient, compositionFromPeople } from '@/lib/expeditionsStore';
 import { suppliersStore } from '@/lib/suppliersStore';
 import { getTermTemplate } from '@/lib/contractsStore';
 import { renderTerm, formatSignLine, TERM_VERSION } from '@/lib/imageRightsTerm';
@@ -212,7 +213,19 @@ export async function POST(request: NextRequest) {
       const exp = await expeditionsStore.get(body.expeditionId);
       if (exp) {
         expeditionName = exp.routeName;
-        // comitiva desta inscrição (não usa a família acumulada de outras expedições)
+        // Composição do carro a partir dos dados reais do formulário: o
+        // acompanhante (1º da família) preenche a vaga do casal se não for
+        // filho; os demais (passageiros adicionais) entram por faixa de
+        // idade. "2º casal + suíte separada" é deduzido da configuração de
+        // quarto escolhida (2/3 Suítes ou Segundo Quarto).
+        const composition = compositionFromPeople(
+          incomingFamily.map((m) => ({ age: ageFrom(m.birthDate) ?? undefined, isChild: m.isChild }))
+        );
+        const roomConfig = incoming.roomConfig || '';
+        composition.secondCoupleSeparateSuite =
+          roomConfig.startsWith('2 Suítes') ||
+          roomConfig.startsWith('3 Suítes') ||
+          roomConfig.includes('Segundo Quarto');
         const adults = 1 + incomingFamily.filter((m) => !m.isChild).length;
         const children = incomingFamily.filter((m) => m.isChild).length;
         const obs = [
@@ -230,7 +243,7 @@ export async function POST(request: NextRequest) {
         ]
           .filter(Boolean)
           .join('\n');
-        const result = await enrollClient(exp, client, { adults, children, observations: obs });
+        const result = await enrollClient(exp, client, { composition, observations: obs });
         if (result.enrollment) enrolled = true;
         else if (result.error) alreadyEnrolled = true;
 

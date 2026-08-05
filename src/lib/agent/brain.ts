@@ -138,8 +138,8 @@ function findLastMentionedExp(
 
 async function expDetail(exp: Awaited<ReturnType<typeof expeditionsStore.all>>[number]): Promise<string> {
   const d = await buildExpeditionDetail(exp);
-  const price = exp.pricePerPerson > 0
-    ? `R$ ${exp.pricePerPerson.toLocaleString('pt-BR')} por pessoa`
+  const price = exp.priceSingle > 0
+    ? `a partir de R$ ${exp.priceSingle.toLocaleString('pt-BR')} (individual)`
     : 'valor a confirmar (entre em contato)';
   const vagas = d.finance.slotsAvailable;
   const status = vagas > 0 ? `${vagas} vagas disponíveis` : 'sem vagas no momento';
@@ -199,8 +199,8 @@ async function fallbackReply(
     const lines = await Promise.all(
       openExp.map(async (e) => {
         const d = await buildExpeditionDetail(e);
-        const price = e.pricePerPerson > 0 ? `R$ ${e.pricePerPerson.toLocaleString('pt-BR')}` : 'a consultar';
-        return `• ${e.routeName} — ${price} por pessoa (${d.finance.slotsAvailable} vagas)`;
+        const price = e.priceSingle > 0 ? `R$ ${e.priceSingle.toLocaleString('pt-BR')}` : 'a consultar';
+        return `• ${e.routeName} — a partir de ${price} individual (${d.finance.slotsAvailable} vagas)`;
       })
     );
     return `Temos estas expedições abertas:\n${lines.join('\n')}\n\nQual delas te interessa? Posso já reservar sua vaga.`;

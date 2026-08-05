@@ -21,7 +21,16 @@ export async function PATCH(
     const { id } = await params;
     const patch = await request.json();
     // sanitiza campos numéricos
-    ['slots', 'pricePerPerson', 'pricePerChild', 'revenueGoal'].forEach((k) => {
+    [
+      'slots',
+      'priceSingle',
+      'priceCouple',
+      'priceChildUpTo5',
+      'priceChild5to10',
+      'priceAbove10',
+      'priceSecondCoupleSuite',
+      'revenueGoal',
+    ].forEach((k) => {
       if (patch[k] !== undefined) patch[k] = Number(patch[k]);
     });
     const exp = await expeditionsStore.update(id, patch);

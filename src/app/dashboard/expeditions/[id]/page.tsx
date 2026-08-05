@@ -38,10 +38,29 @@ import SupplierFormModal, {
 
 // ---- tipos (resumidos do detail do backend) ----
 interface Payment { id: string; date: string; amount: number; method: string; description?: string }
+interface CarComposition {
+  carType: 'single' | 'casal';
+  secondCoupleSeparateSuite: boolean;
+  extraChildUpTo5: number;
+  extraChild5to10: number;
+  extraAbove10: number;
+}
 interface Enrollment {
   id: string; clientId: string; clientName: string; adults: number; children: number;
+  composition?: CarComposition;
   agreedPrice: number; payments: Payment[]; observations?: string; status: string;
   paid: number; balance: number; progress: number;
+}
+
+// Espelha computeCarPrice() de src/lib/expeditionsStore.ts — duplicado aqui
+// (não server-only) para sugerir o valor no modal sem importar a store no bundle do cliente.
+function computeSuggestedPrice(exp: Expedition, c: CarComposition): number {
+  let total = c.carType === 'single' ? exp.priceSingle : exp.priceCouple;
+  if (c.secondCoupleSeparateSuite) total += exp.priceSecondCoupleSuite;
+  total += c.extraChildUpTo5 * exp.priceChildUpTo5;
+  total += c.extraChild5to10 * exp.priceChild5to10;
+  total += c.extraAbove10 * exp.priceAbove10;
+  return total;
 }
 interface Supplier { id: string; name: string; type: string; costPerPerson: number; costPerChild: number }
 interface Finance {
@@ -58,8 +77,10 @@ interface SupplierBilling {
 }
 interface Expedition {
   id: string; routeName: string; sector?: string; description?: string; location?: string;
-  startDate?: string; endDate?: string; slots: number; pricePerPerson: number;
-  pricePerChild: number; revenueGoal: number; status: string; closedAt?: string; supplierIds: string[];
+  startDate?: string; endDate?: string; slots: number;
+  priceSingle: number; priceCouple: number; priceChildUpTo5: number; priceChild5to10: number;
+  priceAbove10: number; priceSecondCoupleSuite: number;
+  revenueGoal: number; status: string; closedAt?: string; supplierIds: string[];
   suppliers: Supplier[]; manualCosts: ManualCost[]; enrollments: Enrollment[];
   finance: Finance; supplierBilling: SupplierBilling[];
 }
@@ -77,6 +98,7 @@ const expStatusColor: Record<string, string> = {
   em_andamento: 'bg-amber-100 text-amber-700',
   fechada: 'bg-emerald-100 text-emerald-700',
   finalizada: 'bg-purple-100 text-purple-700',
+  cancelada: 'bg-rose-100 text-rose-700',
 };
 const expStatusLabel: Record<string, string> = {
   planejamento: 'Planejamento',
@@ -84,6 +106,7 @@ const expStatusLabel: Record<string, string> = {
   em_andamento: 'Em Andamento',
   fechada: 'Fechada',
   finalizada: 'Finalizada',
+  cancelada: 'Cancelada',
 };
 
 export default function ExpeditionDetailPage() {
@@ -300,8 +323,12 @@ function EditExpeditionModal({
     startDate: (exp.startDate || '').slice(0, 10),
     endDate: (exp.endDate || '').slice(0, 10),
     slots: exp.slots ?? 0,
-    pricePerPerson: exp.pricePerPerson ?? 0,
-    pricePerChild: exp.pricePerChild ?? 0,
+    priceSingle: exp.priceSingle ?? 0,
+    priceCouple: exp.priceCouple ?? 0,
+    priceChildUpTo5: exp.priceChildUpTo5 ?? 0,
+    priceChild5to10: exp.priceChild5to10 ?? 0,
+    priceAbove10: exp.priceAbove10 ?? 0,
+    priceSecondCoupleSuite: exp.priceSecondCoupleSuite ?? 0,
     revenueGoal: exp.revenueGoal ?? 0,
     status: exp.status || 'planejamento',
   });
@@ -331,8 +358,10 @@ function EditExpeditionModal({
     }
   };
 
-  const num = (k: 'slots' | 'pricePerPerson' | 'pricePerChild' | 'revenueGoal', v: string) =>
-    setForm((f) => ({ ...f, [k]: Number(v) }));
+  const num = (
+    k: 'slots' | 'priceSingle' | 'priceCouple' | 'priceChildUpTo5' | 'priceChild5to10' | 'priceAbove10' | 'priceSecondCoupleSuite' | 'revenueGoal',
+    v: string
+  ) => setForm((f) => ({ ...f, [k]: Number(v) }));
 
   return (
     <ModalShell title="Editar Expedição" onClose={onClose}>
@@ -360,18 +389,43 @@ function EditExpeditionModal({
             ))}
           </select>
         </div>
-        <div>
-          <label className="text-xs text-gray-500">Preço por adulto (R$)</label>
-          <input type="number" className="input" value={form.pricePerPerson} onChange={(e) => num('pricePerPerson', e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs text-gray-500">Preço por criança (R$)</label>
-          <input type="number" className="input" value={form.pricePerChild} onChange={(e) => num('pricePerChild', e.target.value)} />
-        </div>
         <div className="md:col-span-2">
           <label className="text-xs text-gray-500">Meta de faturamento (R$)</label>
           <input type="number" className="input" value={form.revenueGoal} onChange={(e) => num('revenueGoal', e.target.value)} />
         </div>
+
+        <div className="md:col-span-2 bg-gray-50 rounded-lg p-3 border border-gray-100">
+          <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+            Tabela de preços por carro
+          </label>
+          <div className="grid grid-cols-2 gap-3 mt-2">
+            <div>
+              <label className="text-xs text-gray-500">Single (individual)</label>
+              <input type="number" className="input" value={form.priceSingle} onChange={(e) => num('priceSingle', e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Casal / Dupla</label>
+              <input type="number" className="input" value={form.priceCouple} onChange={(e) => num('priceCouple', e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Adicional até 5 anos</label>
+              <input type="number" className="input" value={form.priceChildUpTo5} onChange={(e) => num('priceChildUpTo5', e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Adicional de 5 a 10 anos</label>
+              <input type="number" className="input" value={form.priceChild5to10} onChange={(e) => num('priceChild5to10', e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Adicional acima de 10 anos</label>
+              <input type="number" className="input" value={form.priceAbove10} onChange={(e) => num('priceAbove10', e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">2º casal no carro + suíte separada</label>
+              <input type="number" className="input" value={form.priceSecondCoupleSuite} onChange={(e) => num('priceSecondCoupleSuite', e.target.value)} />
+            </div>
+          </div>
+        </div>
+
         <textarea className="input md:col-span-2 h-20" placeholder="Descrição" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         <div className="md:col-span-2 flex gap-2">
           <button onClick={save} disabled={saving} className="btn btn-primary">{saving ? 'Salvando...' : 'Salvar'}</button>
@@ -454,8 +508,13 @@ function ClientsTab({
   const [showImport, setShowImport] = useState(false);
   const [clients, setClients] = useState<ClientLite[]>([]);
   const [clientId, setClientId] = useState('');
-  const [adults, setAdults] = useState(1);
-  const [children, setChildren] = useState(0);
+  const [composition, setComposition] = useState<CarComposition>({
+    carType: 'casal',
+    secondCoupleSeparateSuite: false,
+    extraChildUpTo5: 0,
+    extraChild5to10: 0,
+    extraAbove10: 0,
+  });
   const [price, setPrice] = useState('');
   const [contracts, setContracts] = useState<Record<string, { id: string; signedAt: string }>>({});
 
@@ -502,7 +561,7 @@ function ClientsTab({
     loadContracts();
   };
 
-  const suggestedPrice = adults * exp.pricePerPerson + children * exp.pricePerChild;
+  const suggestedPrice = computeSuggestedPrice(exp, composition);
 
   const add = async () => {
     if (!clientId) {
@@ -514,8 +573,7 @@ function ClientsTab({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         clientId,
-        adults,
-        children,
+        composition,
         agreedPrice: price ? Number(price) : suggestedPrice,
       }),
     });
@@ -524,8 +582,13 @@ function ClientsTab({
       onApply(data);
       setShowAdd(false);
       setClientId('');
-      setAdults(1);
-      setChildren(0);
+      setComposition({
+        carType: 'casal',
+        secondCoupleSeparateSuite: false,
+        extraChildUpTo5: 0,
+        extraChild5to10: 0,
+        extraAbove10: 0,
+      });
       setPrice('');
       toast.success('Cliente adicionado à expedição');
     } else {
@@ -624,26 +687,44 @@ function ClientsTab({
                 </a>
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 space-y-3">
               <div>
-                <label className="text-xs text-gray-500">Adultos</label>
-                <input
-                  type="number"
-                  min={1}
+                <label className="text-xs text-gray-500">Carro</label>
+                <select
                   className="input"
-                  value={adults}
-                  onChange={(e) => setAdults(Number(e.target.value))}
-                />
+                  value={composition.carType}
+                  onChange={(e) => setComposition((c) => ({ ...c, carType: e.target.value as CarComposition['carType'] }))}
+                >
+                  <option value="single">Single (individual)</option>
+                  <option value="casal">Casal / Dupla</option>
+                </select>
               </div>
-              <div>
-                <label className="text-xs text-gray-500">Crianças</label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input
-                  type="number"
-                  min={0}
-                  className="input"
-                  value={children}
-                  onChange={(e) => setChildren(Number(e.target.value))}
+                  type="checkbox"
+                  className="accent-orange-500"
+                  checked={composition.secondCoupleSeparateSuite}
+                  onChange={(e) => setComposition((c) => ({ ...c, secondCoupleSeparateSuite: e.target.checked }))}
                 />
+                2º casal no mesmo carro + suíte separada
+              </label>
+              <p className="text-xs text-gray-500">Passageiros adicionais no mesmo carro (por idade):</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500">Até 5 anos</label>
+                  <input type="number" min={0} className="input" value={composition.extraChildUpTo5}
+                    onChange={(e) => setComposition((c) => ({ ...c, extraChildUpTo5: Number(e.target.value) }))} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">5 a 10 anos</label>
+                  <input type="number" min={0} className="input" value={composition.extraChild5to10}
+                    onChange={(e) => setComposition((c) => ({ ...c, extraChild5to10: Number(e.target.value) }))} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Acima de 10</label>
+                  <input type="number" min={0} className="input" value={composition.extraAbove10}
+                    onChange={(e) => setComposition((c) => ({ ...c, extraAbove10: Number(e.target.value) }))} />
+                </div>
               </div>
             </div>
             <div>

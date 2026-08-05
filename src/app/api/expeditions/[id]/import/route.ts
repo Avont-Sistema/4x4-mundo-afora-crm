@@ -8,7 +8,7 @@ import {
   type Client,
   type FamilyMember,
 } from '@/lib/clientsStore';
-import { expeditionsStore, enrollClient } from '@/lib/expeditionsStore';
+import { expeditionsStore, enrollClient, compositionFromPeople } from '@/lib/expeditionsStore';
 
 function fill<T>(existing: T | undefined | null | '', incoming: T | undefined): T | undefined {
   const empty = existing === undefined || existing === null || existing === '';
@@ -177,8 +177,7 @@ export async function POST(
       }
 
       const result = await enrollClient(exp, client, {
-        adults: c.adults,
-        children: c.children,
+        composition: compositionFromPeople(c.companions),
         observations: comitivaObs(c),
       });
       if (result.enrollment) enrolled++;

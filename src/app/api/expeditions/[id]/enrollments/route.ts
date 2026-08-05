@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { expeditionsStore, buildExpeditionDetail, enrollClient } from '@/lib/expeditionsStore';
+import {
+  expeditionsStore,
+  buildExpeditionDetail,
+  enrollClient,
+  type CarComposition,
+} from '@/lib/expeditionsStore';
 import { clientsStore } from '@/lib/clientsStore';
 
 // POST /api/expeditions/:id/enrollments  -> adiciona um cliente ao projeto
@@ -20,9 +25,18 @@ export async function POST(
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
     }
 
+    const composition: Partial<CarComposition> | undefined = body.composition
+      ? {
+          carType: body.composition.carType,
+          secondCoupleSeparateSuite: Boolean(body.composition.secondCoupleSeparateSuite),
+          extraChildUpTo5: Number(body.composition.extraChildUpTo5) || 0,
+          extraChild5to10: Number(body.composition.extraChild5to10) || 0,
+          extraAbove10: Number(body.composition.extraAbove10) || 0,
+        }
+      : undefined;
+
     const result = await enrollClient(exp, client, {
-      adults: body.adults !== undefined ? Number(body.adults) : undefined,
-      children: body.children !== undefined ? Number(body.children) : undefined,
+      composition,
       agreedPrice: body.agreedPrice !== undefined ? Number(body.agreedPrice) : undefined,
       observations: body.observations,
     });

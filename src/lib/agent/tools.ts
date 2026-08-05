@@ -3,6 +3,8 @@ import { negocio } from './negocio';
 import {
   expeditionsStore,
   buildExpeditionDetail,
+  computeCarPrice,
+  compositionFromCounts,
   type Expedition,
 } from '@/lib/expeditionsStore';
 import { clientsStore } from '@/lib/clientsStore';
@@ -222,8 +224,11 @@ export async function executeTool(
             inicio: e.startDate,
             fim: e.endDate,
             vagas_disponiveis: d.finance.slotsAvailable,
-            preco_adulto: e.pricePerPerson,
-            preco_crianca: e.pricePerChild,
+            preco_individual: e.priceSingle,
+            preco_casal: e.priceCouple,
+            preco_adicional_crianca_ate_5: e.priceChildUpTo5,
+            preco_adicional_crianca_5_a_10: e.priceChild5to10,
+            preco_adicional_acima_10: e.priceAbove10,
             link_formulario: expeditionFormUrl(e.id),
           };
         })
@@ -243,8 +248,11 @@ export async function executeTool(
         inicio: exp.startDate,
         fim: exp.endDate,
         vagas_disponiveis: d.finance.slotsAvailable,
-        preco_adulto: exp.pricePerPerson,
-        preco_crianca: exp.pricePerChild,
+        preco_individual: exp.priceSingle,
+        preco_casal: exp.priceCouple,
+        preco_adicional_crianca_ate_5: exp.priceChildUpTo5,
+        preco_adicional_crianca_5_a_10: exp.priceChild5to10,
+        preco_adicional_acima_10: exp.priceAbove10,
         link_formulario: expeditionFormUrl(exp.id),
       };
     }
@@ -280,7 +288,7 @@ export async function executeTool(
       if (!exp) return { sucesso: false, mensagem: 'Expedição não encontrada.' };
       const adultos = Number(input.adultos) || 1;
       const criancas = Number(input.criancas) || 0;
-      const valor = adultos * exp.pricePerPerson + criancas * exp.pricePerChild;
+      const valor = computeCarPrice(exp, compositionFromCounts(adultos, criancas));
       const client = await clientByPhone(phone);
       const charge = await createCharge({
         clientName: input.nome || client?.name || 'Cliente',
@@ -347,13 +355,15 @@ export async function executeTool(
       if (exists) return { sucesso: true, ja_matriculado: true, matricula_id: exists.id };
       const adultos = Number(input.adultos) || 1;
       const criancas = Number(input.criancas) || 0;
+      const composition = compositionFromCounts(adultos, criancas);
       const enr = {
         id: crypto.randomUUID(),
         clientId: client.id,
         clientName: client.name,
         adults: adultos,
         children: criancas,
-        agreedPrice: adultos * exp.pricePerPerson + criancas * exp.pricePerChild,
+        composition,
+        agreedPrice: computeCarPrice(exp, composition),
         payments: [],
         observations: 'Matriculado pelo agente do WhatsApp',
         status: 'reservado' as const,

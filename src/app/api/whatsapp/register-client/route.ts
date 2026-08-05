@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { clientsStore } from '@/lib/clientsStore';
-import { expeditionsStore, buildExpeditionDetail } from '@/lib/expeditionsStore';
+import {
+  expeditionsStore,
+  buildExpeditionDetail,
+  computeCarPrice,
+  compositionFromCounts,
+} from '@/lib/expeditionsStore';
 import { findLeadByPhone, updateLead } from '@/lib/leadsStore';
 
 /**
@@ -71,16 +76,18 @@ export async function POST(request: NextRequest) {
         if (!enr) {
           const adults = Number(body.adults) || 1;
           const children = Number(body.children) || 0;
+          const composition = compositionFromCounts(adults, children);
           const agreedPrice =
             body.agreedPrice !== undefined
               ? Number(body.agreedPrice)
-              : adults * exp.pricePerPerson + children * exp.pricePerChild;
+              : computeCarPrice(exp, composition);
           enr = {
             id: crypto.randomUUID(),
             clientId: client!.id,
             clientName: client!.name,
             adults,
             children,
+            composition,
             agreedPrice,
             payments: [],
             observations: 'Matriculado pelo bot do WhatsApp',
