@@ -78,6 +78,7 @@ export default function ExpeditionsPage() {
   const [form, setForm] = useState(emptyForm);
   const [statusFilter, setStatusFilter] = useState('');
   const [clientSearch, setClientSearch] = useState('');
+  const [dateSort, setDateSort] = useState<'' | 'asc' | 'desc'>('');
 
   const fetchExpeditions = useCallback(async () => {
     setLoading(true);
@@ -121,13 +122,23 @@ export default function ExpeditionsPage() {
     }
   };
 
-  const filtered = expeditions.filter((exp) => {
-    const statusMatch = !statusFilter || exp.status === statusFilter;
-    const search = clientSearch.trim().toLowerCase();
-    const clientMatch =
-      !search || (exp.enrollments || []).some((e) => e.clientName.toLowerCase().includes(search));
-    return statusMatch && clientMatch;
-  });
+  const filtered = expeditions
+    .filter((exp) => {
+      const statusMatch = !statusFilter || exp.status === statusFilter;
+      const search = clientSearch.trim().toLowerCase();
+      const clientMatch =
+        !search || (exp.enrollments || []).some((e) => e.clientName.toLowerCase().includes(search));
+      return statusMatch && clientMatch;
+    })
+    .sort((a, b) => {
+      if (!dateSort) return 0;
+      // sem data sempre vai pro fim, independente da direção
+      if (!a.startDate && !b.startDate) return 0;
+      if (!a.startDate) return 1;
+      if (!b.startDate) return -1;
+      const diff = new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+      return dateSort === 'asc' ? diff : -diff;
+    });
 
   return (
     <div>
@@ -169,6 +180,15 @@ export default function ExpeditionsPage() {
           {Object.entries(statusLabels).map(([k, label]) => (
             <option key={k} value={k}>{label}</option>
           ))}
+        </select>
+        <select
+          className="input sm:w-56"
+          value={dateSort}
+          onChange={(e) => setDateSort(e.target.value as typeof dateSort)}
+        >
+          <option value="">Ordenar por data</option>
+          <option value="asc">Data crescente (mais próxima primeiro)</option>
+          <option value="desc">Data decrescente (mais distante primeiro)</option>
         </select>
       </div>
 
