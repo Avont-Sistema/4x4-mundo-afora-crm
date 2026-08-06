@@ -107,10 +107,30 @@ export default function SuppliersPage() {
               {/* regra de pagamento + custo */}
               <div className="mb-3">
                 <p className="text-[10px] uppercase text-gray-400 mb-1">
-                  {BILLING_LABELS[s.billingMode] || 'Por pessoa'}
+                  {BILLING_LABELS[s.billingMode] || 'Por categoria'}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {(!s.billingMode || s.billingMode === 'per_person') && (
+                  {s.billingMode === 'per_category' && (s.type === 'hotel' || s.type === 'hotel_internacional') && (
+                    <>
+                      <CostChip label="Single" value={s.hotelPricing?.single || 0} />
+                      <CostChip label="Casal" value={s.hotelPricing?.casal || 0} />
+                      <CostChip label="Triplo" value={s.hotelPricing?.triplo || 0} />
+                      <CostChip label="Quádruplo" value={s.hotelPricing?.quadruplo || 0} />
+                      <CostChip label="Família" value={s.hotelPricing?.familia || 0} />
+                      <CostChip label="Adicional" value={s.hotelPricing?.adicional || 0} />
+                    </>
+                  )}
+                  {s.billingMode === 'per_category' && s.type !== 'hotel' && s.type !== 'hotel_internacional' && (
+                    <>
+                      <CostChip label="Por pessoa" value={s.commonPricing?.perPerson || 0} />
+                      <CostChip label="Casal" value={s.commonPricing?.casal || 0} />
+                      <CostChip label="Criança 0-5" value={s.commonPricing?.child0to5 || 0} />
+                      <CostChip label="Criança até 10" value={s.commonPricing?.child5to10 || 0} />
+                      <CostChip label="Acima de 10" value={s.commonPricing?.above10 || 0} />
+                      <CostChip label={`Idoso (≥${s.seniorMinAge ?? 60})`} value={s.commonPricing?.senior || 0} />
+                    </>
+                  )}
+                  {s.billingMode === 'per_person' && (
                     <>
                       <CostChip label="Adulto" value={s.costPerPerson} />
                       <CostChip label={`Criança (≤${s.childMaxAge ?? 12})`} value={s.costPerChild} />

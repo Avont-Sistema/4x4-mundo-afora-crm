@@ -3,13 +3,14 @@
 
 import type { PriceCategory } from './clientsStore';
 
-export type BillingMode = 'per_person' | 'per_car' | 'flat' | 'per_room';
+export type BillingMode = 'per_category' | 'per_person' | 'per_car' | 'flat' | 'per_room';
 
 export const BILLING_LABELS: Record<BillingMode, string> = {
-  per_person: 'Por pessoa (adulto/criança)',
+  per_category: 'Por categoria (pessoa/casal/criança/idoso ou quarto)',
+  per_person: 'Por pessoa (adulto/criança) — legado',
   per_car: 'Por carro/veículo',
   flat: 'Valor fixo (flat)',
-  per_room: 'Por quarto/diária',
+  per_room: 'Por quarto/diária — legado',
 };
 
 // Linha "uma pessoa por linha" usada na planilha do fornecedor

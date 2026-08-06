@@ -62,7 +62,21 @@ function computeSuggestedPrice(exp: Expedition, c: CarComposition): number {
   total += c.extraAbove10 * exp.priceAbove10;
   return total;
 }
-interface Supplier { id: string; name: string; type: string; costPerPerson: number; costPerChild: number }
+interface CommonCategoryPricing {
+  perPerson: number; casal: number; child0to5: number; child5to10: number; above10: number; senior: number;
+}
+interface HotelCategoryPricing {
+  single: number; casal: number; triplo: number; quadruplo: number; familia: number; adicional: number;
+}
+interface SupplierCategoryQuantities {
+  perPerson?: number; casal?: number; child0to5?: number; child5to10?: number; above10?: number; senior?: number;
+  single?: number; triplo?: number; quadruplo?: number; familia?: number; adicional?: number;
+}
+interface Supplier {
+  id: string; name: string; type: string; billingMode?: string; costPerPerson: number; costPerChild: number;
+  commonPricing?: CommonCategoryPricing; hotelPricing?: HotelCategoryPricing;
+}
+const HOTEL_TYPES = ['hotel', 'hotel_internacional'];
 interface Finance {
   totalAdults: number; totalChildren: number; totalParticipants: number;
   cars: number; slotsAvailable: number; avgTicketPerCar: number;
@@ -81,6 +95,7 @@ interface Expedition {
   priceSingle: number; priceCouple: number; priceChildUpTo5: number; priceChild5to10: number;
   priceAbove10: number; priceSecondCoupleSuite: number;
   revenueGoal: number; status: string; closedAt?: string; supplierIds: string[];
+  supplierQuantities?: Record<string, SupplierCategoryQuantities>;
   suppliers: Supplier[]; manualCosts: ManualCost[]; enrollments: Enrollment[];
   finance: Finance; supplierBilling: SupplierBilling[];
 }
@@ -523,7 +538,9 @@ function ClientsTab({
     if (showAdd) {
       fetch('/api/clients')
         .then((r) => r.json())
-        .then((d) => setClients(d.clients || []));
+        .then((d) => setClients(
+          [...(d.clients || []) as ClientLite[]].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+        ));
     }
   }, [showAdd]);
 
@@ -1082,6 +1099,7 @@ function ImportGoogleFormsModal({
 function SuppliersTab({ exp, onApply }: { exp: Expedition; onApply: (d: any) => void }) {
   const [all, setAll] = useState<FullSupplier[]>([]);
   const [editingSupplier, setEditingSupplier] = useState<FullSupplier | null>(null);
+  const [quantitiesSupplier, setQuantitiesSupplier] = useState<FullSupplier | null>(null);
 
   const loadSuppliers = useCallback(() => {
     fetch('/api/suppliers')
@@ -1092,6 +1110,8 @@ function SuppliersTab({ exp, onApply }: { exp: Expedition; onApply: (d: any) => 
   useEffect(() => {
     loadSuppliers();
   }, [loadSuppliers]);
+
+  const billingOf = (id: string) => exp.supplierBilling.find((b) => b.id === id);
 
   const toggle = async (supplierId: string) => {
     const has = exp.supplierIds.includes(supplierId);
@@ -1105,6 +1125,11 @@ function SuppliersTab({ exp, onApply }: { exp: Expedition; onApply: (d: any) => 
     });
     const data = await res.json();
     onApply(data);
+    // fornecedor por categoria: abre direto o editor de quantidades ao vincular
+    if (!has) {
+      const s = all.find((x) => x.id === supplierId);
+      if (s && s.billingMode === 'per_category') setQuantitiesSupplier(s);
+    }
   };
 
   const handleSaved = (saved: FullSupplier) => {
@@ -1112,17 +1137,30 @@ function SuppliersTab({ exp, onApply }: { exp: Expedition; onApply: (d: any) => 
     setEditingSupplier(null);
   };
 
+  const priceSummary = (s: FullSupplier) => {
+    if (s.billingMode !== 'per_category') {
+      return <>Adulto: <strong>{formatBRL(s.costPerPerson)}</strong> · Criança: <strong>{formatBRL(s.costPerChild)}</strong></>;
+    }
+    if (HOTEL_TYPES.includes(s.type)) {
+      const p = s.hotelPricing;
+      return <>Single: <strong>{formatBRL(p?.single || 0)}</strong> · Casal: <strong>{formatBRL(p?.casal || 0)}</strong></>;
+    }
+    const p = s.commonPricing;
+    return <>Por pessoa: <strong>{formatBRL(p?.perPerson || 0)}</strong> · Casal: <strong>{formatBRL(p?.casal || 0)}</strong></>;
+  };
+
   return (
     <div>
       <p className="text-sm text-gray-500 mb-4">
-        Os custos por pessoa/criança de cada fornecedor selecionado alimentam
-        automaticamente os <strong>custos do projeto</strong>. Custo atual de
-        fornecedores: <strong>{formatBRL(exp.finance.supplierCost)}</strong> (
-        {exp.finance.totalAdults} adultos, {exp.finance.totalChildren} crianças).
+        Os custos de cada fornecedor selecionado alimentam automaticamente os{' '}
+        <strong>custos do projeto</strong>. Custo atual de fornecedores:{' '}
+        <strong>{formatBRL(exp.finance.supplierCost)}</strong> ({exp.finance.totalAdults}{' '}
+        adultos, {exp.finance.totalChildren} crianças).
       </p>
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {all.map((s) => {
           const active = exp.supplierIds.includes(s.id);
+          const billing = billingOf(s.id);
           return (
             <div
               key={s.id}
@@ -1149,10 +1187,15 @@ function SuppliersTab({ exp, onApply }: { exp: Expedition; onApply: (d: any) => 
                   </button>
                 </div>
               </div>
-              <p className="text-xs text-gray-500">
-                Adulto: <strong>{formatBRL(s.costPerPerson)}</strong> · Criança:{' '}
-                <strong>{formatBRL(s.costPerChild)}</strong>
-              </p>
+              <p className="text-xs text-gray-500">{priceSummary(s)}</p>
+              {active && s.billingMode === 'per_category' && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setQuantitiesSupplier(s); }}
+                  className="text-xs mt-2 px-2 py-1 rounded-lg bg-white border border-amber-200 text-amber-700 font-medium hover:bg-amber-50"
+                >
+                  Quantidades: {formatBRL(billing?.amount || 0)} — editar
+                </button>
+              )}
               <p className={`text-xs mt-2 font-medium ${active ? 'text-amber-600' : 'text-gray-400'}`}>
                 {active ? '✓ Incluído no projeto' : 'Clique para incluir'}
               </p>
@@ -1169,6 +1212,15 @@ function SuppliersTab({ exp, onApply }: { exp: Expedition; onApply: (d: any) => 
         )}
       </div>
 
+      {quantitiesSupplier && (
+        <SupplierQuantitiesModal
+          exp={exp}
+          supplier={quantitiesSupplier}
+          onClose={() => setQuantitiesSupplier(null)}
+          onSaved={(data) => { onApply(data); setQuantitiesSupplier(null); }}
+        />
+      )}
+
       {editingSupplier && (
         <SupplierFormModal
           supplier={editingSupplier}
@@ -1177,6 +1229,124 @@ function SuppliersTab({ exp, onApply }: { exp: Expedition; onApply: (d: any) => 
         />
       )}
     </div>
+  );
+}
+
+// Editor das quantidades por categoria (billingMode 'per_category') lançadas
+// para este fornecedor nesta expedição — sugerido automaticamente a partir
+// das matrículas ativas na primeira vez, editável depois pra bater com a
+// fatura real. É a mesma fonte usada no financeiro da expedição, no
+// financeiro geral e na planilha do fornecedor (ver resolveSupplierCost).
+function SupplierQuantitiesModal({
+  exp,
+  supplier,
+  onClose,
+  onSaved,
+}: {
+  exp: Expedition;
+  supplier: FullSupplier;
+  onClose: () => void;
+  onSaved: (data: any) => void;
+}) {
+  const isHotel = HOTEL_TYPES.includes(supplier.type);
+  const stored = exp.supplierQuantities?.[supplier.id];
+  const [qty, setQty] = useState<SupplierCategoryQuantities>(stored || {});
+  const [loadingSuggestion, setLoadingSuggestion] = useState(!stored);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (stored) return; // já tem valor lançado, não sobrescreve com sugestão
+    setLoadingSuggestion(true);
+    fetch(`/api/expeditions/${exp.id}/suppliers/${supplier.id}/suggest`)
+      .then((r) => r.json())
+      .then((d) => { if (d.suggested) setQty(d.suggested); })
+      .catch(() => {})
+      .finally(() => setLoadingSuggestion(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exp.id, supplier.id]);
+
+  const set = (k: keyof SupplierCategoryQuantities, v: string) => {
+    setQty((q) => ({ ...q, [k]: v === '' ? undefined : Number(v) }));
+  };
+
+  const pricing: Record<string, number> = (isHotel ? supplier.hotelPricing : supplier.commonPricing) as any || {};
+  const fields: { key: keyof SupplierCategoryQuantities; label: string }[] = isHotel
+    ? [
+        { key: 'single', label: 'Single' },
+        { key: 'casal', label: 'Casal' },
+        { key: 'triplo', label: 'Triplo' },
+        { key: 'quadruplo', label: 'Quádruplo' },
+        { key: 'familia', label: 'Família' },
+        { key: 'adicional', label: 'Adicional' },
+      ]
+    : [
+        { key: 'perPerson', label: 'Por pessoa' },
+        { key: 'casal', label: 'Casal' },
+        { key: 'child0to5', label: 'Criança 0-5' },
+        { key: 'child5to10', label: 'Criança até 10' },
+        { key: 'above10', label: 'Acima de 10' },
+        { key: 'senior', label: 'Idoso' },
+      ];
+
+  const total = fields.reduce((sum, f) => sum + (qty[f.key] || 0) * (pricing[f.key] || 0), 0);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/expeditions/${exp.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          supplierQuantities: { ...(exp.supplierQuantities || {}), [supplier.id]: qty },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao salvar');
+      toast.success('Quantidades salvas');
+      onSaved(data);
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao salvar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalShell title={`Quantidades — ${supplier.name}`} onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-sm text-gray-500">
+          {loadingSuggestion
+            ? 'Calculando sugestão a partir das matrículas...'
+            : 'Sugestão calculada a partir das matrículas ativas — confira e ajuste pra bater com a fatura real do fornecedor.'}
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {fields.map((f) => (
+            <div key={f.key}>
+              <label className="text-xs text-gray-500">
+                {f.label} <span className="text-gray-400">({formatBRL(pricing[f.key] || 0)})</span>
+              </label>
+              <input
+                type="number"
+                min={0}
+                className="input"
+                value={qty[f.key] ?? 0}
+                onChange={(e) => set(f.key, e.target.value)}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 flex justify-between items-center">
+          <span className="text-sm font-medium">Total a pagar</span>
+          <span className="text-lg font-bold text-amber-600">{formatBRL(total)}</span>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={save} disabled={saving} className="btn btn-primary">
+            {saving ? 'Salvando...' : 'Salvar'}
+          </button>
+          <button onClick={onClose} className="btn btn-secondary">Cancelar</button>
+        </div>
+      </div>
+    </ModalShell>
   );
 }
 

@@ -19,6 +19,58 @@ export type SupplierType =
 // dinâmico (pedir configuração de quarto) — Feature 3.
 export const HOTEL_SUPPLIER_TYPES: SupplierType[] = ['hotel', 'hotel_internacional'];
 
+// Tarifário por categoria — fornecedor "comum" (restaurante, transporte, guia,
+// passeio...). Mesmas faixas etárias já usadas na composição do carro da
+// expedição (upTo5/5to10/above10, ver classifyChildAge em expeditionsStore),
+// mais "casal" (par fechado, não é 2x por pessoa) e "idoso" (pela idade real).
+export interface CommonCategoryPricing {
+  perPerson: number; // avulso/single
+  casal: number; // par (titular + acompanhante) — valor fechado
+  child0to5: number;
+  child5to10: number;
+  above10: number;
+  senior: number; // idoso, pela idade real (ver seniorMinAge)
+}
+
+// Tarifário por categoria — fornecedor tipo hotel: preço por quarto conforme
+// ocupação, não por pessoa/idade.
+export interface HotelCategoryPricing {
+  single: number;
+  casal: number;
+  triplo: number;
+  quadruplo: number;
+  familia: number;
+  adicional: number; // pessoa extra além da ocupação do pacote escolhido
+}
+
+export const EMPTY_COMMON_PRICING: CommonCategoryPricing = {
+  perPerson: 0, casal: 0, child0to5: 0, child5to10: 0, above10: 0, senior: 0,
+};
+export const EMPTY_HOTEL_PRICING: HotelCategoryPricing = {
+  single: 0, casal: 0, triplo: 0, quadruplo: 0, familia: 0, adicional: 0,
+};
+
+// Quantidade de cada categoria contratada numa expedição (billingMode
+// 'per_category'), lançada uma vez para a expedição inteira — sugerida
+// automaticamente a partir das matrículas, mas editável pela equipe pra bater
+// com a fatura real do fornecedor. As chaves usadas dependem do tipo do
+// fornecedor (comum usa perPerson/casal/child.../senior; hotel usa
+// single/casal/triplo/quadruplo/familia/adicional — "casal" é compartilhado
+// mas tem preço próprio em cada tarifário).
+export interface SupplierCategoryQuantities {
+  perPerson?: number;
+  casal?: number;
+  child0to5?: number;
+  child5to10?: number;
+  above10?: number;
+  senior?: number;
+  single?: number;
+  triplo?: number;
+  quadruplo?: number;
+  familia?: number;
+  adicional?: number;
+}
+
 export interface Supplier extends BaseRecord {
   name: string;
   type: SupplierType;
@@ -27,14 +79,18 @@ export interface Supplier extends BaseRecord {
   address?: string;
   // Regra de pagamento e custos pré-configurados que alimentam o custo das expedições
   billingMode: BillingMode;
-  costPerPerson: number; // custo por adulto (modo per_person)
-  costPerChild: number; // custo por criança (modo per_person)
-  costPerStudent?: number; // custo por estudante (modo per_person)
-  costPerSenior?: number; // custo por idoso (modo per_person)
+  // Tarifário por categoria (modo per_category) — só um dos dois é usado,
+  // conforme HOTEL_SUPPLIER_TYPES.includes(type)
+  commonPricing?: CommonCategoryPricing;
+  hotelPricing?: HotelCategoryPricing;
+  costPerPerson: number; // custo por adulto (modo per_person, legado)
+  costPerChild: number; // custo por criança (modo per_person, legado)
+  costPerStudent?: number; // custo por estudante (modo per_person, legado)
+  costPerSenior?: number; // custo por idoso (modo per_person, legado)
   childMaxAge?: number; // criança: idade até (anos). Default 12
   seniorMinAge?: number; // idoso: idade a partir de (anos). Default 60
   costPerCar: number; // custo por carro (modo per_car)
-  costPerRoom: number; // custo por quarto (modo per_room)
+  costPerRoom: number; // custo por quarto (modo per_room, legado)
   flatFee: number; // valor fixo da expedição (modo flat)
   // Quais colunas de dados dos clientes vão na planilha deste fornecedor
   exportFields: string[];
@@ -95,7 +151,11 @@ export function resolveCategory(
   return 'adulto';
 }
 
-// Quanto se deve a um fornecedor numa expedição, conforme a regra de pagamento dele
+// Quanto se deve a um fornecedor numa expedição, conforme a regra de pagamento
+// dele. Não cobre 'per_category' (precisa das quantidades lançadas na
+// expedição, não cabem no ctx agregado) — ver resolveSupplierCost em
+// expeditionsStore.ts, que é quem de fato decide entre este cálculo legado e
+// categoryCost().
 export function supplierCost(s: Supplier, ctx: SupplierCostContext): number {
   switch (s.billingMode) {
     case 'per_car':
@@ -104,10 +164,38 @@ export function supplierCost(s: Supplier, ctx: SupplierCostContext): number {
       return s.flatFee || 0;
     case 'per_room':
       return (s.costPerRoom || 0) * ctx.rooms;
+    case 'per_category':
+      return 0;
     case 'per_person':
     default:
       return (s.costPerPerson || 0) * ctx.adults + (s.costPerChild || 0) * ctx.children;
   }
+}
+
+// Custo por categoria (modo per_category) a partir das quantidades lançadas
+// na expedição para este fornecedor. "casal" existe nos dois tarifários
+// (comum e hotel) com preço próprio em cada um.
+export function categoryCost(s: Supplier, q: SupplierCategoryQuantities): number {
+  if (HOTEL_SUPPLIER_TYPES.includes(s.type)) {
+    const p = s.hotelPricing || EMPTY_HOTEL_PRICING;
+    return (
+      (q.single || 0) * p.single +
+      (q.casal || 0) * p.casal +
+      (q.triplo || 0) * p.triplo +
+      (q.quadruplo || 0) * p.quadruplo +
+      (q.familia || 0) * p.familia +
+      (q.adicional || 0) * p.adicional
+    );
+  }
+  const p = s.commonPricing || EMPTY_COMMON_PRICING;
+  return (
+    (q.perPerson || 0) * p.perPerson +
+    (q.casal || 0) * p.casal +
+    (q.child0to5 || 0) * p.child0to5 +
+    (q.child5to10 || 0) * p.child5to10 +
+    (q.above10 || 0) * p.above10 +
+    (q.senior || 0) * p.senior
+  );
 }
 
 function seed(): Supplier[] {

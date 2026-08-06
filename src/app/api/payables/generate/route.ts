@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { payablesStore } from '@/lib/payablesStore';
-import { expeditionsStore, computeFinance } from '@/lib/expeditionsStore';
-import { suppliersStore, supplierCost } from '@/lib/suppliersStore';
+import { expeditionsStore, computeFinance, resolveSupplierCost } from '@/lib/expeditionsStore';
+import { suppliersStore } from '@/lib/suppliersStore';
 
 // Gera contas a pagar (pendentes) a partir dos fornecedores de uma expedição,
 // com base nos participantes atuais (adultos/crianças). Evita duplicar
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     for (const s of suppliers) {
       if (!exp.supplierIds.includes(s.id)) continue;
       if (existing.some((p) => p.supplierId === s.id)) continue; // já gerado
-      const amount = supplierCost(s, ctx);
+      const amount = resolveSupplierCost(s, exp, ctx);
       if (amount <= 0) continue;
       await payablesStore.create({
         description: `${s.name} — ${exp.routeName}`,

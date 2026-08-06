@@ -5,6 +5,24 @@ import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { EXPORT_FIELDS, BILLING_LABELS, type BillingMode } from '@/lib/supplierFields';
 
+export interface CommonCategoryPricing {
+  perPerson: number;
+  casal: number;
+  child0to5: number;
+  child5to10: number;
+  above10: number;
+  senior: number;
+}
+
+export interface HotelCategoryPricing {
+  single: number;
+  casal: number;
+  triplo: number;
+  quadruplo: number;
+  familia: number;
+  adicional: number;
+}
+
 export interface Supplier {
   id: string;
   name: string;
@@ -13,6 +31,8 @@ export interface Supplier {
   phone?: string;
   address?: string;
   billingMode: BillingMode;
+  commonPricing?: CommonCategoryPricing;
+  hotelPricing?: HotelCategoryPricing;
   costPerPerson: number;
   costPerChild: number;
   costPerStudent?: number;
@@ -37,6 +57,15 @@ export const SUPPLIER_TYPE_LABELS: Record<string, string> = {
   outro: 'Outro',
 };
 
+const HOTEL_TYPES = ['hotel', 'hotel_internacional'];
+
+const EMPTY_COMMON_PRICING: CommonCategoryPricing = {
+  perPerson: 0, casal: 0, child0to5: 0, child5to10: 0, above10: 0, senior: 0,
+};
+const EMPTY_HOTEL_PRICING: HotelCategoryPricing = {
+  single: 0, casal: 0, triplo: 0, quadruplo: 0, familia: 0, adicional: 0,
+};
+
 export const SUPPLIER_TYPE_COLORS: Record<string, string> = {
   hotel: 'bg-yellow-100 text-amber-800',
   hotel_internacional: 'bg-blue-100 text-blue-800',
@@ -54,6 +83,8 @@ type SupplierFormState = {
   phone: string;
   address: string;
   billingMode: BillingMode;
+  commonPricing: CommonCategoryPricing;
+  hotelPricing: HotelCategoryPricing;
   costPerPerson: number;
   costPerChild: number;
   costPerStudent: number;
@@ -74,7 +105,9 @@ const emptyForm: SupplierFormState = {
   email: '',
   phone: '',
   address: '',
-  billingMode: 'per_person',
+  billingMode: 'per_category',
+  commonPricing: { ...EMPTY_COMMON_PRICING },
+  hotelPricing: { ...EMPTY_HOTEL_PRICING },
   costPerPerson: 0,
   costPerChild: 0,
   costPerStudent: 0,
@@ -96,7 +129,9 @@ function formFromSupplier(s: Supplier): SupplierFormState {
     email: s.email || '',
     phone: s.phone || '',
     address: s.address || '',
-    billingMode: s.billingMode || 'per_person',
+    billingMode: s.billingMode || 'per_category',
+    commonPricing: { ...EMPTY_COMMON_PRICING, ...s.commonPricing },
+    hotelPricing: { ...EMPTY_HOTEL_PRICING, ...s.hotelPricing },
     costPerPerson: s.costPerPerson || 0,
     costPerChild: s.costPerChild || 0,
     costPerStudent: s.costPerStudent || 0,
@@ -194,6 +229,91 @@ export default function SupplierFormModal({
             </select>
 
             <div className="grid grid-cols-2 gap-3 mt-3">
+              {form.billingMode === 'per_category' && HOTEL_TYPES.includes(form.type) && (
+                <>
+                  <div className="col-span-2">
+                    <p className="text-[11px] text-gray-400 mb-1">
+                      Preço por quarto conforme ocupação. As quantidades de cada tipo são
+                      lançadas depois, dentro de cada expedição (aba Fornecedores).
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Single (R$)</label>
+                    <input type="number" className="input" value={form.hotelPricing.single}
+                      onChange={(e) => setForm({ ...form, hotelPricing: { ...form.hotelPricing, single: Number(e.target.value) } })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Casal (R$)</label>
+                    <input type="number" className="input" value={form.hotelPricing.casal}
+                      onChange={(e) => setForm({ ...form, hotelPricing: { ...form.hotelPricing, casal: Number(e.target.value) } })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Triplo (R$)</label>
+                    <input type="number" className="input" value={form.hotelPricing.triplo}
+                      onChange={(e) => setForm({ ...form, hotelPricing: { ...form.hotelPricing, triplo: Number(e.target.value) } })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Quádruplo (R$)</label>
+                    <input type="number" className="input" value={form.hotelPricing.quadruplo}
+                      onChange={(e) => setForm({ ...form, hotelPricing: { ...form.hotelPricing, quadruplo: Number(e.target.value) } })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Família (R$)</label>
+                    <input type="number" className="input" value={form.hotelPricing.familia}
+                      onChange={(e) => setForm({ ...form, hotelPricing: { ...form.hotelPricing, familia: Number(e.target.value) } })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Adicional (R$)</label>
+                    <input type="number" className="input" value={form.hotelPricing.adicional}
+                      onChange={(e) => setForm({ ...form, hotelPricing: { ...form.hotelPricing, adicional: Number(e.target.value) } })} />
+                  </div>
+                </>
+              )}
+              {form.billingMode === 'per_category' && !HOTEL_TYPES.includes(form.type) && (
+                <>
+                  <div className="col-span-2">
+                    <p className="text-[11px] text-gray-400 mb-1">
+                      Preço por categoria de pessoa. As quantidades contratadas são lançadas
+                      depois, dentro de cada expedição (aba Fornecedores).
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Por pessoa (R$)</label>
+                    <input type="number" className="input" value={form.commonPricing.perPerson}
+                      onChange={(e) => setForm({ ...form, commonPricing: { ...form.commonPricing, perPerson: Number(e.target.value) } })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Casal (R$)</label>
+                    <input type="number" className="input" value={form.commonPricing.casal}
+                      onChange={(e) => setForm({ ...form, commonPricing: { ...form.commonPricing, casal: Number(e.target.value) } })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Criança de 0 a 5 anos (R$)</label>
+                    <input type="number" className="input" value={form.commonPricing.child0to5}
+                      onChange={(e) => setForm({ ...form, commonPricing: { ...form.commonPricing, child0to5: Number(e.target.value) } })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Criança de até 10 anos (R$)</label>
+                    <input type="number" className="input" value={form.commonPricing.child5to10}
+                      onChange={(e) => setForm({ ...form, commonPricing: { ...form.commonPricing, child5to10: Number(e.target.value) } })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Acima de 10 anos (R$)</label>
+                    <input type="number" className="input" value={form.commonPricing.above10}
+                      onChange={(e) => setForm({ ...form, commonPricing: { ...form.commonPricing, above10: Number(e.target.value) } })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Idoso (R$)</label>
+                    <input type="number" className="input" value={form.commonPricing.senior}
+                      onChange={(e) => setForm({ ...form, commonPricing: { ...form.commonPricing, senior: Number(e.target.value) } })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Idoso: idade a partir de (anos)</label>
+                    <input type="number" min={0} className="input" value={form.seniorMinAge}
+                      onChange={(e) => setForm({ ...form, seniorMinAge: Number(e.target.value) })} />
+                  </div>
+                </>
+              )}
               {form.billingMode === 'per_person' && (
                 <>
                   <div className="col-span-2">

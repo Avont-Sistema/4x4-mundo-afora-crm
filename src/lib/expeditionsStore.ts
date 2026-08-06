@@ -2,8 +2,10 @@ import { createCollection, type BaseRecord } from './jsonCollection';
 import {
   suppliersStore,
   supplierCost as calcSupplierCost,
+  categoryCost,
   BILLING_LABELS,
   type Supplier,
+  type SupplierCategoryQuantities,
 } from './suppliersStore';
 import { type Client } from './clientsStore';
 
@@ -97,6 +99,9 @@ export interface Expedition extends BaseRecord {
   status: ExpeditionStatus;
   closedAt?: string; // data de fechamento da expedição
   supplierIds: string[]; // fornecedores configurados no projeto
+  // Quantidades por categoria (billingMode 'per_category'), lançadas uma vez
+  // pra expedição inteira — ver SupplierCategoryQuantities. Chave = supplier.id.
+  supplierQuantities?: Record<string, SupplierCategoryQuantities>;
   manualCosts: ManualCost[]; // custos avulsos
   enrollments: Enrollment[]; // clientes do projeto
 }
@@ -275,6 +280,21 @@ export interface ExpeditionFinance {
   paymentProgress: number; // %
 }
 
+// Decide entre o cálculo legado (ctx agregado: adultos/crianças/carros/quartos)
+// e o cálculo por categoria (quantidades lançadas na expedição para este
+// fornecedor) — fonte única usada por computeFinance, geração de contas a
+// pagar e planilha do fornecedor, pra nunca divergir entre as telas.
+export function resolveSupplierCost(
+  s: Supplier,
+  exp: Expedition,
+  ctx: { adults: number; children: number; cars: number; rooms: number }
+): number {
+  if (s.billingMode === 'per_category') {
+    return categoryCost(s, exp.supplierQuantities?.[s.id] || {});
+  }
+  return calcSupplierCost(s, ctx);
+}
+
 export function computeFinance(
   exp: Expedition,
   suppliers: Supplier[]
@@ -302,7 +322,7 @@ export function computeFinance(
 
   const ctx = { adults: totalAdults, children: totalChildren, cars, rooms: cars };
   const used = suppliers.filter((s) => exp.supplierIds.includes(s.id));
-  const supplierCost = used.reduce((a, s) => a + calcSupplierCost(s, ctx), 0);
+  const supplierCost = used.reduce((a, s) => a + resolveSupplierCost(s, exp, ctx), 0);
   const manualCostTotal = exp.manualCosts.reduce((a, c) => a + c.amount, 0);
   const totalCost = supplierCost + manualCostTotal;
 
@@ -359,10 +379,10 @@ export async function buildExpeditionDetail(exp: Expedition) {
     id: s.id,
     name: s.name,
     type: s.type,
-    billingMode: s.billingMode || 'per_person',
-    billingLabel: BILLING_LABELS[s.billingMode] || 'Por pessoa',
+    billingMode: s.billingMode || 'per_category',
+    billingLabel: BILLING_LABELS[s.billingMode] || 'Por categoria',
     exportFieldCount: (s.exportFields || []).length,
-    amount: calcSupplierCost(s, ctx),
+    amount: resolveSupplierCost(s, exp, ctx),
   }));
 
   return { ...exp, suppliers, finance, enrollments, supplierBilling };
