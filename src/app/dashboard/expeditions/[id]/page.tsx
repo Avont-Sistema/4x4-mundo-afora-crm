@@ -506,6 +506,7 @@ function ClientsTab({
 }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showImportGoogleForms, setShowImportGoogleForms] = useState(false);
   const [clients, setClients] = useState<ClientLite[]>([]);
   const [clientId, setClientId] = useState('');
   const [composition, setComposition] = useState<CarComposition>({
@@ -561,6 +562,15 @@ function ClientsTab({
     loadContracts();
   };
 
+  const handleImportedGoogleForms = async () => {
+    setShowImportGoogleForms(false);
+    try {
+      const r = await fetch(`/api/expeditions/${exp.id}`);
+      onApply(await r.json());
+    } catch { /* ignore */ }
+    loadContracts();
+  };
+
   const suggestedPrice = computeSuggestedPrice(exp, composition);
 
   const add = async () => {
@@ -601,6 +611,9 @@ function ClientsTab({
       <div className="flex justify-end gap-2 mb-4">
         <button onClick={() => setShowImport(true)} className="btn btn-secondary flex items-center gap-2">
           <Upload size={18} /> Importar planilha
+        </button>
+        <button onClick={() => setShowImportGoogleForms(true)} className="btn btn-secondary flex items-center gap-2">
+          <FileSpreadsheet size={18} /> Importar Google Forms
         </button>
         <button onClick={() => setShowAdd(true)} className="btn btn-primary flex items-center gap-2">
           <UserPlus size={18} /> Adicionar Cliente
@@ -758,6 +771,14 @@ function ClientsTab({
           onImported={handleImported}
         />
       )}
+
+      {showImportGoogleForms && (
+        <ImportGoogleFormsModal
+          expId={exp.id}
+          onClose={() => setShowImportGoogleForms(false)}
+          onImported={handleImportedGoogleForms}
+        />
+      )}
     </div>
   );
 }
@@ -897,6 +918,154 @@ function ImportPlanModal({
               <button onClick={() => send('confirm')} disabled={importing} className="btn btn-primary flex items-center gap-2">
                 {importing ? <Loader size={16} className="animate-spin" /> : <Check size={16} />}
                 {importing ? 'Importando...' : `Confirmar importação (${preview.totalCars})`}
+              </button>
+              <button onClick={() => setPreview(null)} className="btn btn-secondary">Trocar arquivo</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </ModalShell>
+  );
+}
+
+// ===========================================================================
+// Modal: Importar respostas do Google Forms (.csv ou .xlsx exportado do Sheets)
+// ===========================================================================
+interface ImportGFPreviewResponse {
+  rowNumber: number;
+  driverName: string;
+  cpf?: string;
+  car?: string;
+  plate?: string;
+  adults: number;
+  children: number;
+  companions: { name: string; isChild: boolean; age?: number }[];
+  roomConfig?: string;
+  existing: boolean;
+}
+
+function ImportGoogleFormsModal({
+  expId,
+  onClose,
+  onImported,
+}: {
+  expId: string;
+  onClose: () => void;
+  onImported: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [preview, setPreview] = useState<{
+    totalResponses: number;
+    responses: ImportGFPreviewResponse[];
+    warnings: string[];
+  } | null>(null);
+
+  const send = async (mode: 'preview' | 'confirm') => {
+    if (!file) { toast.error('Selecione o arquivo .csv ou .xlsx'); return; }
+    const setBusy = mode === 'preview' ? setLoading : setImporting;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(
+        `/api/expeditions/${expId}/import-google-forms${mode === 'preview' ? '?preview=1' : ''}`,
+        { method: 'POST', body: fd }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Falha ao processar arquivo');
+
+      if (mode === 'preview') {
+        setPreview({
+          totalResponses: data.totalResponses,
+          responses: data.responses,
+          warnings: data.warnings || [],
+        });
+      } else {
+        toast.success(
+          `Importado: ${data.created} novo(s), ${data.merged} atualizado(s), ${data.enrolled} matriculado(s)` +
+            (data.skipped ? ` · ${data.skipped} já estavam na expedição` : '')
+        );
+        if (data.warnings?.length) {
+          toast(`${data.warnings.length} aviso(s) na importação — confira os dados importados.`, { icon: '⚠️' });
+        }
+        onImported();
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Erro na importação');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const newCount = preview?.responses.filter((r) => !r.existing).length ?? 0;
+  const existingCount = preview?.responses.filter((r) => r.existing).length ?? 0;
+
+  return (
+    <ModalShell title="Importar respostas do Google Forms" onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-sm text-gray-500">
+          Selecione o arquivo <strong>.csv</strong> (ou .xlsx) baixado das respostas do
+          formulário do Google. O sistema reconhece as colunas pelo texto da pergunta
+          (Motorista Principal, Acompanhante, Passageiros Adicionais...), cadastra/atualiza
+          os clientes e matricula cada resposta nesta expedição.
+        </p>
+
+        <input
+          type="file"
+          accept=".csv,.xlsx,.xls"
+          onChange={(e) => { setFile(e.target.files?.[0] || null); setPreview(null); }}
+          className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gray-900 file:text-white file:text-sm file:font-semibold hover:file:bg-black"
+        />
+
+        {!preview && (
+          <button
+            onClick={() => send('preview')}
+            disabled={!file || loading}
+            className="btn btn-primary flex items-center gap-2"
+          >
+            {loading ? <Loader size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
+            {loading ? 'Analisando...' : 'Analisar respostas'}
+          </button>
+        )}
+
+        {preview && (
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-3 text-sm">
+              <span className="px-3 py-1 rounded-full bg-gray-100 font-medium">{preview.totalResponses} resposta(s)</span>
+              <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 font-medium">{newCount} novo(s)</span>
+              <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 font-medium">{existingCount} já cadastrado(s)</span>
+            </div>
+
+            {preview.warnings.length > 0 && (
+              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 max-h-32 overflow-y-auto">
+                {preview.warnings.map((w, i) => <p key={i}>⚠ {w}</p>)}
+              </div>
+            )}
+
+            <div className="max-h-72 overflow-y-auto border border-gray-100 rounded-lg divide-y divide-gray-100">
+              {preview.responses.map((r, i) => (
+                <div key={i} className="p-3 text-sm">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold">{i + 1}. {r.driverName}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${r.existing ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      {r.existing ? 'já cadastrado' : 'novo'}
+                    </span>
+                    <span className="text-xs text-gray-400">{r.adults}A{r.children > 0 ? ` · ${r.children}C` : ''}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {r.car || 'carro não informado'}{r.plate ? ` · ${r.plate}` : ''}
+                    {r.companions.length > 0 && <> · {r.companions.map((p) => p.name).join(', ')}</>}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <button onClick={() => send('confirm')} disabled={importing} className="btn btn-primary flex items-center gap-2">
+                {importing ? <Loader size={16} className="animate-spin" /> : <Check size={16} />}
+                {importing ? 'Importando...' : `Confirmar importação (${preview.totalResponses})`}
               </button>
               <button onClick={() => setPreview(null)} className="btn btn-secondary">Trocar arquivo</button>
             </div>
