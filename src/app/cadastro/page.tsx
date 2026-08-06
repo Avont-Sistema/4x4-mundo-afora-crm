@@ -83,7 +83,6 @@ interface FormData {
   confirmedResponsibility: boolean;
   email: string;
   name: string;
-  age: string;
   cpf: string;
   birthDate: string;
   job: string;
@@ -98,7 +97,6 @@ interface FormData {
   companionName: string;
   companionRelation: CompanionRelation;
   companionCpf: string;
-  companionAge: string;
   companionBirthDate: string;
   companionJob: string;
   passportNumber: string;
@@ -126,7 +124,6 @@ const emptyForm: FormData = {
   confirmedResponsibility: false,
   email: '',
   name: '',
-  age: '',
   cpf: '',
   birthDate: '',
   job: '',
@@ -141,7 +138,6 @@ const emptyForm: FormData = {
   companionName: '',
   companionRelation: 'conjuge',
   companionCpf: '',
-  companionAge: '',
   companionBirthDate: '',
   companionJob: '',
   passportNumber: '',
@@ -171,6 +167,19 @@ function formatDateBR(d?: string) {
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+// Idade é sempre derivada da data de nascimento (nunca digitada à parte) para
+// não haver como o valor mostrado divergir do que é usado no cálculo de preço.
+function ageFromBirthDate(birthDate?: string): number | null {
+  if (!birthDate) return null;
+  const d = new Date(birthDate.length <= 10 ? birthDate + 'T12:00:00' : birthDate);
+  if (isNaN(d.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+  return age;
+}
+
 type Phase = 'form' | 'sign' | 'done';
 
 export default function CadastroPage() {
@@ -184,6 +193,7 @@ export default function CadastroPage() {
   const [clientId, setClientId] = useState<string | null>(null);
   const [expeditionName, setExpeditionName] = useState<string | undefined>(undefined);
   const [signedContract, setSignedContract] = useState<ContractPdfData | null>(null);
+  const [alreadyEnrolled, setAlreadyEnrolled] = useState(false);
 
   const [form, setForm] = useState<FormData>(emptyForm);
 
@@ -305,7 +315,6 @@ export default function CadastroPage() {
     if (!form.confirmedData) errs.push({ key: 'confirmedData', message: 'Confirme que os dados são reais' });
 
     req('name', form.name, 'Informe o nome completo do motorista');
-    req('age', form.age, 'Informe a idade do motorista');
     if (!form.cpf.trim()) errs.push({ key: 'cpf', message: 'Informe o CPF do motorista' });
     else { const e = cpfError(form.cpf); if (e) errs.push({ key: 'cpf', message: `CPF do motorista: ${e}` }); }
     if (!form.birthDate) errs.push({ key: 'birthDate', message: 'Informe a data de nascimento do motorista' });
@@ -323,7 +332,6 @@ export default function CadastroPage() {
     req('companionName', form.companionName, 'Informe o nome do acompanhante');
     if (!form.companionCpf.trim()) errs.push({ key: 'companionCpf', message: 'Informe o CPF do acompanhante' });
     else { const e = cpfError(form.companionCpf); if (e) errs.push({ key: 'companionCpf', message: `CPF do acompanhante: ${e}` }); }
-    req('companionAge', form.companionAge, 'Informe a idade do acompanhante');
     if (!form.companionBirthDate) errs.push({ key: 'companionBirthDate', message: 'Informe a data de nascimento do acompanhante' });
     req('companionJob', form.companionJob, 'Informe a profissão do acompanhante');
 
@@ -461,6 +469,10 @@ export default function CadastroPage() {
       if (!res.ok) throw new Error(data.error || 'Erro ao cadastrar');
       setClientId(data.clientId);
       setExpeditionName(data.expeditionName || expedition?.routeName);
+      setAlreadyEnrolled(!!data.alreadyEnrolled);
+      if (data.alreadyEnrolled) {
+        toast('Você já estava inscrito nessa expedição — vamos só atualizar seus dados e o termo.', { icon: 'ℹ️', duration: 6000 });
+      }
       setPhase('sign');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e: any) {
@@ -544,11 +556,15 @@ export default function CadastroPage() {
           <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-5">
             <Check className="text-emerald-600" size={32} />
           </div>
-          <h2 className="text-2xl font-bold mb-2">Inscrição concluída!</h2>
+          <h2 className="text-2xl font-bold mb-2">
+            {alreadyEnrolled ? 'Dados atualizados!' : 'Inscrição concluída!'}
+          </h2>
           <p className="text-gray-500 mb-6">
-            {expeditionName
-              ? <>Sua inscrição para <strong>{expeditionName}</strong> e o termo de uso de imagem foram registrados. Em breve entraremos em contato pelo WhatsApp.</>
-              : 'Suas informações e o termo de uso de imagem foram registrados. Em breve entraremos em contato pelo WhatsApp.'}
+            {alreadyEnrolled
+              ? <>Você já estava inscrito em <strong>{expeditionName}</strong> — não criamos uma nova matrícula, só atualizamos seus dados e registramos o termo de uso de imagem. Em breve entraremos em contato pelo WhatsApp.</>
+              : expeditionName
+                ? <>Sua inscrição para <strong>{expeditionName}</strong> e o termo de uso de imagem foram registrados. Em breve entraremos em contato pelo WhatsApp.</>
+                : 'Suas informações e o termo de uso de imagem foram registrados. Em breve entraremos em contato pelo WhatsApp.'}
           </p>
           {signedContract && (
             <button
@@ -708,7 +724,6 @@ export default function CadastroPage() {
         <Card title="Dados do Motorista Principal">
           <div className="grid md:grid-cols-2 gap-3">
             <input className={errClass('name', 'input md:col-span-2')} placeholder="Nome completo *" value={form.name} onChange={(e) => set('name', e.target.value)} />
-            <input className={errClass('age')} placeholder="Idade *" value={form.age} onChange={(e) => set('age', e.target.value)} />
             <div>
               <input className={errClass('cpf', 'input w-full')} placeholder="CPF *" value={form.cpf} onChange={(e) => set('cpf', formatCpf(e.target.value))} />
               {form.cpf.trim() && cpfError(form.cpf) && (
@@ -718,6 +733,9 @@ export default function CadastroPage() {
             <div>
               <label className="text-xs text-gray-500">Data de nascimento *</label>
               <input type="date" className={errClass('birthDate')} value={form.birthDate} onChange={(e) => set('birthDate', e.target.value)} />
+              {form.birthDate && ageFromBirthDate(form.birthDate) !== null && (
+                <p className="text-[11px] text-gray-400 mt-1">Idade: {ageFromBirthDate(form.birthDate)} anos</p>
+              )}
             </div>
             <input className={errClass('job')} placeholder="Profissão *" value={form.job} onChange={(e) => set('job', e.target.value)} />
             <input className={errClass('phone', 'input md:col-span-2')} placeholder="Número de contato (telefone/WhatsApp) *" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
@@ -782,10 +800,12 @@ export default function CadastroPage() {
                 <p className="text-[11px] text-rose-500 mt-1">{cpfError(form.companionCpf)}</p>
               )}
             </div>
-            <input className={errClass('companionAge')} placeholder="Idade do acompanhante *" value={form.companionAge} onChange={(e) => set('companionAge', e.target.value)} />
             <div>
               <label className="text-xs text-gray-500">Data de nascimento do acompanhante *</label>
               <input type="date" className={errClass('companionBirthDate')} value={form.companionBirthDate} onChange={(e) => set('companionBirthDate', e.target.value)} />
+              {form.companionBirthDate && ageFromBirthDate(form.companionBirthDate) !== null && (
+                <p className="text-[11px] text-gray-400 mt-1">Idade: {ageFromBirthDate(form.companionBirthDate)} anos</p>
+              )}
             </div>
             <input className={errClass('companionJob')} placeholder="Profissão do acompanhante *" value={form.companionJob} onChange={(e) => set('companionJob', e.target.value)} />
           </div>

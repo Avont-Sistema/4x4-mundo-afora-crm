@@ -256,6 +256,17 @@ export async function POST(request: NextRequest) {
             (merged ? '' : '\n🆕 Cliente novo') +
             (client.phone ? `\n📞 ${client.phone}` : '')
           );
+        } else if (alreadyEnrolled) {
+          // Cliente já estava matriculado nessa expedição — não cria matrícula
+          // nova, mas o formulário foi reenviado (dados atualizados) e ainda
+          // assim precisa aparecer para a equipe, senão a tentativa some sem
+          // ninguém saber que aconteceu.
+          const { notifyOwners } = await import('@/lib/notify');
+          void notifyOwners(
+            `🔁 *Formulário reenviado (já inscrito)*\n${client.name} → ${exp.routeName}\n` +
+            `Já estava matriculado nessa expedição — dados atualizados, sem nova matrícula.` +
+            (client.phone ? `\n📞 ${client.phone}` : '')
+          );
         }
       }
     }

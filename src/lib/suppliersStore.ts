@@ -77,18 +77,21 @@ export function categoryPrice(s: Supplier, cat: PriceCategory): number {
 
 // Resolve a categoria de uma pessoa: usa a categoria manual se houver; senão
 // deduz por idade (criança até childMaxAge, idoso a partir de seniorMinAge).
+// Quando a idade real é conhecida, ela manda — a flag "isChild" (que reflete
+// parentesco, ex. "filho" de 17 anos) só é usada como fallback sem idade.
 export function resolveCategory(
   s: Supplier,
   opts: { priceCategory?: PriceCategory; age?: number | null; isChild?: boolean }
 ): PriceCategory {
   if (opts.priceCategory) return opts.priceCategory;
-  if (opts.isChild) return 'crianca';
   const childMax = s.childMaxAge ?? DEFAULT_CHILD_MAX_AGE;
   const seniorMin = s.seniorMinAge ?? DEFAULT_SENIOR_MIN_AGE;
   if (opts.age != null && !Number.isNaN(opts.age)) {
     if (opts.age <= childMax) return 'crianca';
     if (opts.age >= seniorMin) return 'idoso';
+    return 'adulto';
   }
+  if (opts.isChild) return 'crianca';
   return 'adulto';
 }
 
