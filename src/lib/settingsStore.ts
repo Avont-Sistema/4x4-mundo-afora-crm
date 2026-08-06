@@ -1,4 +1,4 @@
-import { kvLoad, kvSave } from './kvStore';
+import { kvLoadVersioned, kvSaveVersioned } from './kvStore';
 
 // Configurações globais do agente/atendimento, persistidas via kvStore.
 
@@ -44,24 +44,14 @@ const DEFAULTS: Settings = {
     'Olá! No momento estamos fora do horário de atendimento, mas já já retornamos por aqui. 😊',
 };
 
-let cache: Settings | null = null;
-
+// Sem cache em memória entre chamadas, e escrita com compare-and-swap — ver
+// jsonCollection.ts para o porquê.
 async function load(): Promise<Settings> {
-  if (cache) return cache;
   try {
-    const stored = await kvLoad<Partial<Settings>>(KV_KEY);
-    cache = stored ? { ...DEFAULTS, ...stored } : { ...DEFAULTS };
+    const loaded = await kvLoadVersioned<Partial<Settings>>(KV_KEY);
+    return loaded ? { ...DEFAULTS, ...loaded.value } : { ...DEFAULTS };
   } catch {
-    cache = { ...DEFAULTS };
-  }
-  return cache;
-}
-
-async function persist(): Promise<void> {
-  try {
-    await kvSave(KV_KEY, cache ?? DEFAULTS);
-  } catch (err) {
-    console.error('Erro ao escrever settings:', err);
+    return { ...DEFAULTS };
   }
 }
 
@@ -70,9 +60,25 @@ export async function getSettings(): Promise<Settings> {
 }
 
 export async function updateSettings(patch: Partial<Settings>): Promise<Settings> {
-  cache = { ...(await load()), ...patch };
-  await persist();
-  return cache;
+  const maxAttempts = 8;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let loaded;
+    try {
+      loaded = await kvLoadVersioned<Partial<Settings>>(KV_KEY);
+    } catch {
+      loaded = null;
+    }
+    const current = loaded ? { ...DEFAULTS, ...loaded.value } : { ...DEFAULTS };
+    const version = loaded ? loaded.version : null;
+    const updated = { ...current, ...patch };
+    try {
+      if (await kvSaveVersioned(KV_KEY, updated, version)) return updated;
+    } catch (err) {
+      console.error('Erro ao escrever settings:', err);
+      return updated;
+    }
+  }
+  throw new Error(`settingsStore: não foi possível salvar após ${maxAttempts} tentativas`);
 }
 
 export async function isWithinBusinessHours(date = new Date()): Promise<boolean> {

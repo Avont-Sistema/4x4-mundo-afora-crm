@@ -349,54 +349,63 @@ export async function executeTool(
           origin: 'whatsapp_bot',
         });
       }
-      const exists = exp.enrollments.find(
-        (e) => e.clientId === client!.id && e.status !== 'cancelado'
-      );
-      if (exists) return { sucesso: true, ja_matriculado: true, matricula_id: exists.id };
       const adultos = Number(input.adultos) || 1;
       const criancas = Number(input.criancas) || 0;
       const composition = compositionFromCounts(adultos, criancas);
-      const enr = {
-        id: crypto.randomUUID(),
-        clientId: client.id,
-        clientName: client.name,
-        adults: adultos,
-        children: criancas,
-        composition,
-        agreedPrice: computeCarPrice(exp, composition),
-        payments: [],
-        observations: 'Matriculado pelo agente do WhatsApp',
-        status: 'reservado' as const,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      exp.enrollments.push(enr);
-      await expeditionsStore.touch(exp.id);
+      const agreedPrice = computeCarPrice(exp, composition);
+      const enrollmentId = crypto.randomUUID();
+      const now = new Date().toISOString();
+
+      let alreadyEnrolledId: string | undefined;
+      await expeditionsStore.touchWith(exp.id, (fresh) => {
+        const existing = fresh.enrollments.find(
+          (e) => e.clientId === client!.id && e.status !== 'cancelado'
+        );
+        if (existing) { alreadyEnrolledId = existing.id; return; }
+        fresh.enrollments.push({
+          id: enrollmentId,
+          clientId: client!.id,
+          clientName: client!.name,
+          adults: adultos,
+          children: criancas,
+          composition,
+          agreedPrice,
+          payments: [],
+          observations: 'Matriculado pelo agente do WhatsApp',
+          status: 'reservado',
+          createdAt: now,
+          updatedAt: now,
+        });
+      });
+      if (alreadyEnrolledId) return { sucesso: true, ja_matriculado: true, matricula_id: alreadyEnrolledId };
       void notifyOwners(
         `🎉 *Cliente fechado pelo bot!*\n${client.name} → ${exp.routeName}\n` +
-        `${adultos} adulto(s)${criancas ? ` + ${criancas} criança(s)` : ''} · R$ ${enr.agreedPrice.toLocaleString('pt-BR')}`
+        `${adultos} adulto(s)${criancas ? ` + ${criancas} criança(s)` : ''} · R$ ${agreedPrice.toLocaleString('pt-BR')}`
       );
-      return { sucesso: true, matricula_id: enr.id, valor: enr.agreedPrice };
+      return { sucesso: true, matricula_id: enrollmentId, valor: agreedPrice };
     }
 
     case 'registrar_pagamento': {
       const exp = await findExpeditionByName(input.expedicao);
       if (!exp) return { sucesso: false, mensagem: 'Expedição não encontrada.' };
       const client = await clientByPhone(phone);
-      const enr = exp.enrollments.find(
-        (e) => client && e.clientId === client.id && e.status !== 'cancelado'
-      );
-      if (!enr) return { sucesso: false, mensagem: 'Cliente não está matriculado nessa expedição.' };
-      enr.payments.push({
-        id: crypto.randomUUID(),
-        date: new Date().toISOString().split('T')[0],
-        amount: Number(input.valor),
-        method: input.metodo || 'link',
-        description: 'Pagamento via WhatsApp',
+
+      let notFound = false;
+      await expeditionsStore.touchWith(exp.id, (fresh) => {
+        const enr = fresh.enrollments.find(
+          (e) => client && e.clientId === client.id && e.status !== 'cancelado'
+        );
+        if (!enr) { notFound = true; return; }
+        enr.payments.push({
+          id: crypto.randomUUID(),
+          date: new Date().toISOString().split('T')[0],
+          amount: Number(input.valor),
+          method: input.metodo || 'link',
+          description: 'Pagamento via WhatsApp',
+        });
+        enr.status = 'confirmado';
       });
-      enr.status = 'confirmado';
-      enr.updatedAt = new Date().toISOString();
-      await expeditionsStore.touch(exp.id);
+      if (notFound) return { sucesso: false, mensagem: 'Cliente não está matriculado nessa expedição.' };
       void notifyOwners(
         `💰 *Pagamento registrado*\n${client?.name ?? phone.split('@')[0]} · ${exp.routeName}\n` +
         `R$ ${Number(input.valor).toLocaleString('pt-BR')} (${input.metodo || 'link'})`

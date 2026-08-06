@@ -61,27 +61,41 @@ const DEFAULTS: Partial<Integrations> = {
   pixMerchantCity: 'SAO PAULO',
 };
 
-import { kvLoad, kvSave } from './kvStore';
+import { kvLoadVersioned, kvSaveVersioned } from './kvStore';
 
 const KV_KEY = 'integrations';
-let cache: Partial<Integrations> | null = null;
 
+// Sem cache em memória entre chamadas, e escrita com compare-and-swap — ver
+// jsonCollection.ts para o porquê.
 async function load(): Promise<Partial<Integrations>> {
-  if (cache) return cache;
   try {
-    cache = (await kvLoad<Partial<Integrations>>(KV_KEY)) ?? {};
+    const loaded = await kvLoadVersioned<Partial<Integrations>>(KV_KEY);
+    return loaded ? loaded.value : {};
   } catch {
-    cache = {};
+    return {};
   }
-  return cache;
 }
 
-async function persist() {
-  try {
-    await kvSave(KV_KEY, cache ?? {});
-  } catch (err) {
-    console.error('Erro ao salvar integrations:', err);
+async function withRetry(mutate: (cur: Partial<Integrations>) => void): Promise<Partial<Integrations>> {
+  const maxAttempts = 8;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let loaded;
+    try {
+      loaded = await kvLoadVersioned<Partial<Integrations>>(KV_KEY);
+    } catch {
+      loaded = null;
+    }
+    const cur = loaded ? { ...loaded.value } : {};
+    const version = loaded ? loaded.version : null;
+    mutate(cur);
+    try {
+      if (await kvSaveVersioned(KV_KEY, cur, version)) return cur;
+    } catch (err) {
+      console.error('Erro ao salvar integrations:', err);
+      return cur;
+    }
   }
+  throw new Error(`integrationsStore: não foi possível salvar após ${maxAttempts} tentativas`);
 }
 
 // Valor efetivo de um campo: UI salva > env > default
@@ -106,14 +120,13 @@ export async function resolve(): Promise<Integrations> {
 
 // Atualiza campos. Segredos vazios são ignorados (não apagam o existente).
 export async function updateIntegrations(patch: Partial<Integrations>) {
-  const cur = await load();
-  for (const [k, v] of Object.entries(patch) as [keyof Integrations, string][]) {
-    if (!(k in ENV_MAP)) continue;
-    if (SECRET_FIELDS.includes(k) && (v === undefined || v === '')) continue;
-    cur[k] = v;
-  }
-  cache = cur;
-  await persist();
+  await withRetry((cur) => {
+    for (const [k, v] of Object.entries(patch) as [keyof Integrations, string][]) {
+      if (!(k in ENV_MAP)) continue;
+      if (SECRET_FIELDS.includes(k) && (v === undefined || v === '')) continue;
+      cur[k] = v;
+    }
+  });
   return maskedView();
 }
 

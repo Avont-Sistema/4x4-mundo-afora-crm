@@ -211,9 +211,6 @@ export async function enrollClient(
     observations?: string;
   } = {}
 ): Promise<{ enrollment?: Enrollment; error?: string }> {
-  if (exp.enrollments.some((e) => e.clientId === client.id && e.status !== 'cancelado')) {
-    return { error: 'Cliente já está nesta expedição' };
-  }
   const composition: CarComposition = { ...emptyComposition, ...opts.composition };
   const { adults, children } = compositionParty(composition);
   const agreedPrice = opts.agreedPrice ?? computeCarPrice(exp, composition);
@@ -232,8 +229,21 @@ export async function enrollClient(
     createdAt: now,
     updatedAt: now,
   };
-  exp.enrollments.push(enrollment);
-  await expeditionsStore.touch(exp.id);
+
+  // A checagem de "já matriculado" e a inserção acontecem dentro do
+  // touchWith, sobre o registro mais recente do banco — evita que duas
+  // inscrições concorrentes (ex.: dois clientes no mesmo formulário quase ao
+  // mesmo tempo) se percam uma pisando na outra.
+  let duplicate = false;
+  const updated = await expeditionsStore.touchWith(exp.id, (fresh) => {
+    if (fresh.enrollments.some((e) => e.clientId === client.id && e.status !== 'cancelado')) {
+      duplicate = true;
+      return;
+    }
+    fresh.enrollments.push(enrollment);
+  });
+  if (duplicate) return { error: 'Cliente já está nesta expedição' };
+  if (!updated) return { error: 'Expedição não encontrada' };
   return { enrollment };
 }
 

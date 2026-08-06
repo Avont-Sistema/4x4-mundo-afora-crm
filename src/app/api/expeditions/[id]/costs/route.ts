@@ -20,15 +20,19 @@ export async function POST(
         { status: 400 }
       );
     }
-    exp.manualCosts.push({
-      id: crypto.randomUUID(),
-      label: body.label,
-      amount,
-      date: body.date || new Date().toISOString().split('T')[0],
+    const updated = await expeditionsStore.touchWith(id, (fresh) => {
+      fresh.manualCosts.push({
+        id: crypto.randomUUID(),
+        label: body.label,
+        amount,
+        date: body.date || new Date().toISOString().split('T')[0],
+      });
     });
-    await expeditionsStore.touch(exp.id);
+    if (!updated) {
+      return NextResponse.json({ error: 'Expedição não encontrada' }, { status: 404 });
+    }
     return NextResponse.json(
-      { expedition: await buildExpeditionDetail(exp) },
+      { expedition: await buildExpeditionDetail(updated) },
       { status: 201 }
     );
   } catch (error: any) {
@@ -47,11 +51,11 @@ export async function DELETE(
   const { id } = await params;
   const { searchParams } = new URL(request.url);
   const costId = searchParams.get('costId');
-  const exp = await expeditionsStore.get(id);
-  if (!exp) {
+  const updated = await expeditionsStore.touchWith(id, (fresh) => {
+    fresh.manualCosts = fresh.manualCosts.filter((c) => c.id !== costId);
+  });
+  if (!updated) {
     return NextResponse.json({ error: 'Expedição não encontrada' }, { status: 404 });
   }
-  exp.manualCosts = exp.manualCosts.filter((c) => c.id !== costId);
-  await expeditionsStore.touch(exp.id);
-  return NextResponse.json({ expedition: await buildExpeditionDetail(exp) });
+  return NextResponse.json({ expedition: await buildExpeditionDetail(updated) });
 }

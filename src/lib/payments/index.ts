@@ -110,23 +110,25 @@ export async function recordConfirmedPayment(
   // Caso 1: pagamento ligado a uma matrícula existente
   if (externalReference.startsWith('enrollment:')) {
     const enrId = externalReference.split(':')[1];
-    for (const exp of await expeditionsStore.all()) {
-      const enr = exp.enrollments.find((e) => e.id === enrId);
-      if (enr) {
-        enr.payments.push({
-          id: crypto.randomUUID(),
-          date: new Date().toISOString().split('T')[0],
-          amount,
-          method,
-          description: 'Pagamento confirmado automaticamente',
-        });
-        enr.status = 'confirmado';
-        enr.updatedAt = new Date().toISOString();
-        await expeditionsStore.touch(exp.id);
-        return { ok: true };
-      }
-    }
-    return { ok: false };
+    const exp = (await expeditionsStore.all()).find((e) =>
+      e.enrollments.some((enr) => enr.id === enrId)
+    );
+    if (!exp) return { ok: false };
+    let found = false;
+    await expeditionsStore.touchWith(exp.id, (fresh) => {
+      const enr = fresh.enrollments.find((e) => e.id === enrId);
+      if (!enr) return;
+      found = true;
+      enr.payments.push({
+        id: crypto.randomUUID(),
+        date: new Date().toISOString().split('T')[0],
+        amount,
+        method,
+        description: 'Pagamento confirmado automaticamente',
+      });
+      enr.status = 'confirmado';
+    });
+    return { ok: found };
   }
 
   // Caso 2: pagamento iniciado pelo bot (lead:<phone>|exp:<expId>)
@@ -152,36 +154,37 @@ export async function recordConfirmedPayment(
     }
     await upsertLeadFromContact({ name: client.name, phone, source: 'whatsapp', stage: 'finalizado' });
 
-    let enr = exp.enrollments.find(
-      (e) => e.clientId === client!.id && e.status !== 'cancelado'
-    );
-    if (!enr) {
-      enr = {
+    const newEnrollmentId = crypto.randomUUID();
+    await expeditionsStore.touchWith(exp.id, (fresh) => {
+      let enr = fresh.enrollments.find(
+        (e) => e.clientId === client!.id && e.status !== 'cancelado'
+      );
+      if (!enr) {
+        enr = {
+          id: newEnrollmentId,
+          clientId: client!.id,
+          clientName: client!.name,
+          adults: 1,
+          children: 0,
+          composition: compositionFromCounts(1, 0),
+          agreedPrice: amount,
+          payments: [],
+          observations: 'Matriculado via pagamento confirmado (Asaas)',
+          status: 'confirmado',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        fresh.enrollments.push(enr);
+      }
+      enr.payments.push({
         id: crypto.randomUUID(),
-        clientId: client.id,
-        clientName: client.name,
-        adults: 1,
-        children: 0,
-        composition: compositionFromCounts(1, 0),
-        agreedPrice: amount,
-        payments: [],
-        observations: 'Matriculado via pagamento confirmado (Asaas)',
-        status: 'confirmado',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      exp.enrollments.push(enr);
-    }
-    enr.payments.push({
-      id: crypto.randomUUID(),
-      date: new Date().toISOString().split('T')[0],
-      amount,
-      method,
-      description: 'Pagamento confirmado automaticamente',
+        date: new Date().toISOString().split('T')[0],
+        amount,
+        method,
+        description: 'Pagamento confirmado automaticamente',
+      });
+      enr.status = 'confirmado';
     });
-    enr.status = 'confirmado';
-    enr.updatedAt = new Date().toISOString();
-    await expeditionsStore.touch(exp.id);
     return { ok: true };
   }
 

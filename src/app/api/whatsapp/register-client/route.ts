@@ -70,47 +70,52 @@ export async function POST(request: NextRequest) {
     if (body.expeditionId) {
       const exp = await expeditionsStore.get(body.expeditionId);
       if (exp) {
-        let enr = exp.enrollments.find(
-          (e) => e.clientId === client!.id && e.status !== 'cancelado'
-        );
-        if (!enr) {
-          const adults = Number(body.adults) || 1;
-          const children = Number(body.children) || 0;
-          const composition = compositionFromCounts(adults, children);
-          const agreedPrice =
-            body.agreedPrice !== undefined
-              ? Number(body.agreedPrice)
-              : computeCarPrice(exp, composition);
-          enr = {
-            id: crypto.randomUUID(),
-            clientId: client!.id,
-            clientName: client!.name,
-            adults,
-            children,
-            composition,
-            agreedPrice,
-            payments: [],
-            observations: 'Matriculado pelo bot do WhatsApp',
-            status: 'reservado',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-          exp.enrollments.push(enr);
+        const newEnrollmentId = crypto.randomUUID();
+        const updated = await expeditionsStore.touchWith(exp.id, (fresh) => {
+          let enr = fresh.enrollments.find(
+            (e) => e.clientId === client!.id && e.status !== 'cancelado'
+          );
+          if (!enr) {
+            const adults = Number(body.adults) || 1;
+            const children = Number(body.children) || 0;
+            const composition = compositionFromCounts(adults, children);
+            const agreedPrice =
+              body.agreedPrice !== undefined
+                ? Number(body.agreedPrice)
+                : computeCarPrice(fresh, composition);
+            enr = {
+              id: newEnrollmentId,
+              clientId: client!.id,
+              clientName: client!.name,
+              adults,
+              children,
+              composition,
+              agreedPrice,
+              payments: [],
+              observations: 'Matriculado pelo bot do WhatsApp',
+              status: 'reservado',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+            fresh.enrollments.push(enr);
+          }
+          if (body.paymentAmount && Number(body.paymentAmount) > 0) {
+            enr.payments.push({
+              id: crypto.randomUUID(),
+              date: new Date().toISOString().split('T')[0],
+              amount: Number(body.paymentAmount),
+              method: body.paymentMethod || 'link',
+              description: 'Pagamento via WhatsApp',
+            });
+            enr.status = 'confirmado';
+          }
+        });
+        if (updated) {
+          enrollment = updated.enrollments.find(
+            (e) => e.clientId === client!.id && e.status !== 'cancelado'
+          );
+          expeditionDetail = await buildExpeditionDetail(updated);
         }
-        if (body.paymentAmount && Number(body.paymentAmount) > 0) {
-          enr.payments.push({
-            id: crypto.randomUUID(),
-            date: new Date().toISOString().split('T')[0],
-            amount: Number(body.paymentAmount),
-            method: body.paymentMethod || 'link',
-            description: 'Pagamento via WhatsApp',
-          });
-          enr.status = 'confirmado';
-        }
-        enr.updatedAt = new Date().toISOString();
-        await expeditionsStore.touch(exp.id);
-        enrollment = enr;
-        expeditionDetail = await buildExpeditionDetail(exp);
       }
     }
 

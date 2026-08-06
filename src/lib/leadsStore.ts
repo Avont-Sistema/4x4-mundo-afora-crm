@@ -1,4 +1,4 @@
-import { kvLoad, kvSave } from './kvStore';
+import { kvLoadVersioned, kvSaveVersioned } from './kvStore';
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -67,7 +67,6 @@ export const LEAD_SOURCES: { key: LeadSource; label: string }[] = [
 // ---------------------------------------------------------------------------
 
 const KEY = 'leads';
-let cache: Lead[] | null = null;
 
 function nowISO() {
   return new Date().toISOString();
@@ -137,20 +136,31 @@ function seedLeads(): Lead[] {
   ];
 }
 
+// Sem cache em memória, e toda escrita usa compare-and-swap (retry se outra
+// requisição concorrente gravou primeiro) — ver jsonCollection.ts para os
+// detalhes e o porquê (registro "sumindo" sem motivo aparente).
 async function load(): Promise<Lead[]> {
-  if (cache) return cache;
-  const existing = await kvLoad<Lead[]>(KEY);
-  if (existing) {
-    cache = existing;
-    return cache;
-  }
-  cache = seedLeads();
-  await persist();
-  return cache;
+  const loaded = await kvLoadVersioned<Lead[]>(KEY);
+  if (loaded) return loaded.value;
+  const seeded = seedLeads();
+  await kvSaveVersioned(KEY, seeded, null);
+  return seeded;
 }
 
-async function persist() {
-  await kvSave(KEY, cache ?? []);
+async function withRetry<R>(
+  mutate: (arr: Lead[]) => { found: boolean; result: R }
+): Promise<R> {
+  const maxAttempts = 8;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const loaded = await kvLoadVersioned<Lead[]>(KEY);
+    const arr = loaded ? loaded.value : seedLeads();
+    const version = loaded ? loaded.version : null;
+    const { found, result } = mutate(arr);
+    if (!found) return result;
+    const ok = await kvSaveVersioned(KEY, arr, version);
+    if (ok) return result;
+  }
+  throw new Error(`leadsStore: não foi possível salvar após ${maxAttempts} tentativas (concorrência muito alta)`);
 }
 
 // ---------------------------------------------------------------------------
@@ -202,7 +212,6 @@ export interface CreateLeadInput {
 }
 
 export async function createLead(input: CreateLeadInput): Promise<Lead> {
-  const leads = await load();
   const ts = nowISO();
   const lead: Lead = {
     id: crypto.randomUUID(),
@@ -220,33 +229,32 @@ export async function createLead(input: CreateLeadInput): Promise<Lead> {
     createdAt: ts,
     updatedAt: ts,
   };
-  leads.push(lead);
-  cache = leads;
-  await persist();
-  return lead;
+  return withRetry((leads) => {
+    leads.push(lead);
+    return { found: true, result: lead };
+  });
 }
 
 export async function updateLead(
   id: string,
   patch: Partial<Lead>
 ): Promise<Lead | undefined> {
-  const leads = await load();
-  const idx = leads.findIndex((l) => l.id === id);
-  if (idx === -1) return undefined;
-  const { id: _ignore, createdAt: _ignore2, ...rest } = patch;
-  leads[idx] = { ...leads[idx], ...rest, updatedAt: nowISO() };
-  cache = leads;
-  await persist();
-  return leads[idx];
+  return withRetry((leads) => {
+    const idx = leads.findIndex((l) => l.id === id);
+    if (idx === -1) return { found: false, result: undefined };
+    const { id: _ignore, createdAt: _ignore2, ...rest } = patch;
+    leads[idx] = { ...leads[idx], ...rest, updatedAt: nowISO() };
+    return { found: true, result: leads[idx] };
+  });
 }
 
 export async function deleteLead(id: string): Promise<boolean> {
-  const leads = await load();
-  const next = leads.filter((l) => l.id !== id);
-  if (next.length === leads.length) return false;
-  cache = next;
-  await persist();
-  return true;
+  return withRetry((leads) => {
+    const idx = leads.findIndex((l) => l.id === id);
+    if (idx === -1) return { found: false, result: false };
+    leads.splice(idx, 1);
+    return { found: true, result: true };
+  });
 }
 
 // Cria ou atualiza um lead a partir de um contato (usado pelo bot do WhatsApp

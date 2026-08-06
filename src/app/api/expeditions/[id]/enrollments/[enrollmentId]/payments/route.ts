@@ -21,19 +21,24 @@ export async function POST(
     if (!amount || amount <= 0) {
       return NextResponse.json({ error: 'Valor inválido' }, { status: 400 });
     }
-    enr.payments.push({
-      id: crypto.randomUUID(),
-      date: body.date || new Date().toISOString().split('T')[0],
-      amount,
-      method: body.method || 'pix',
-      description: body.description,
+    const updated = await expeditionsStore.touchWith(id, (fresh) => {
+      const freshEnr = fresh.enrollments.find((e) => e.id === enrollmentId);
+      if (!freshEnr) return;
+      freshEnr.payments.push({
+        id: crypto.randomUUID(),
+        date: body.date || new Date().toISOString().split('T')[0],
+        amount,
+        method: body.method || 'pix',
+        description: body.description,
+      });
+      // confirma a matrícula automaticamente ao primeiro pagamento
+      if (freshEnr.status === 'reservado') freshEnr.status = 'confirmado';
     });
-    // confirma a matrícula automaticamente ao primeiro pagamento
-    if (enr.status === 'reservado') enr.status = 'confirmado';
-    enr.updatedAt = new Date().toISOString();
-    await expeditionsStore.touch(exp.id);
+    if (!updated) {
+      return NextResponse.json({ error: 'Expedição não encontrada' }, { status: 404 });
+    }
     return NextResponse.json(
-      { expedition: await buildExpeditionDetail(exp) },
+      { expedition: await buildExpeditionDetail(updated) },
       { status: 201 }
     );
   } catch (error: any) {
@@ -56,12 +61,16 @@ export async function DELETE(
   if (!exp) {
     return NextResponse.json({ error: 'Expedição não encontrada' }, { status: 404 });
   }
-  const enr = exp.enrollments.find((e) => e.id === enrollmentId);
-  if (!enr) {
+  if (!exp.enrollments.some((e) => e.id === enrollmentId)) {
     return NextResponse.json({ error: 'Matrícula não encontrada' }, { status: 404 });
   }
-  enr.payments = enr.payments.filter((p) => p.id !== paymentId);
-  enr.updatedAt = new Date().toISOString();
-  await expeditionsStore.touch(exp.id);
-  return NextResponse.json({ expedition: await buildExpeditionDetail(exp) });
+  const updated = await expeditionsStore.touchWith(id, (fresh) => {
+    const freshEnr = fresh.enrollments.find((e) => e.id === enrollmentId);
+    if (!freshEnr) return;
+    freshEnr.payments = freshEnr.payments.filter((p) => p.id !== paymentId);
+  });
+  if (!updated) {
+    return NextResponse.json({ error: 'Expedição não encontrada' }, { status: 404 });
+  }
+  return NextResponse.json({ expedition: await buildExpeditionDetail(updated) });
 }
