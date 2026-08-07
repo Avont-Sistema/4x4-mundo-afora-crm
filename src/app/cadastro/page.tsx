@@ -1004,13 +1004,15 @@ export default function CadastroPage() {
           <div className="flex gap-3">
             <AlertCircle size={16} className="flex-shrink-0 mt-0.5 text-amber-500" />
             <div>
-              <p className="font-semibold mb-2">Política de Cancelamento</p>
+              <p className="font-semibold mb-2">Política de Cancelamento e Devolução de Valores</p>
               <p className="text-xs mb-2">Em caso de desistência da viagem, a devolução segue a antecedência do cancelamento:</p>
               <ul className="text-xs leading-relaxed space-y-0.5">
-                <li>• Até <strong>30 dias</strong> antes da viagem: <strong>100%</strong> devolvido.</li>
-                <li>• Até <strong>15 dias</strong> antes da viagem: <strong>50%</strong> devolvido.</li>
-                <li>• Até <strong>10 dias</strong> antes da viagem: <strong>30%</strong> devolvido.</li>
-                <li>• <strong>Após os 10 dias</strong> que antecedem a viagem: <strong>sem devolução</strong> por desistência.</li>
+                <li>• Até <strong>120 dias</strong> antes da viagem: <strong>100%</strong> devolvido.</li>
+                <li>• Até <strong>90 dias</strong> antes da viagem: <strong>90%</strong> devolvido.</li>
+                <li>• Até <strong>60 dias</strong> antes da viagem: <strong>80%</strong> devolvido.</li>
+                <li>• Até <strong>30 dias</strong> antes da viagem: <strong>50%</strong> devolvido.</li>
+                <li>• Até <strong>15 dias</strong> antes da viagem: <strong>30%</strong> devolvido.</li>
+                <li>• <strong>Após os 15 dias</strong> que antecedem a viagem: <strong>sem devolução</strong> por desistência.</li>
               </ul>
             </div>
           </div>
