@@ -1599,7 +1599,11 @@ function ClientDrawer({
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState('pix');
   const [desc, setDesc] = useState('');
+  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [obs, setObs] = useState(enrollment.observations || '');
+  const [editingPrice, setEditingPrice] = useState(false);
+  const [priceInput, setPriceInput] = useState(String(enrollment.agreedPrice));
+  const [savingPrice, setSavingPrice] = useState(false);
   const base = `/api/expeditions/${exp.id}/enrollments/${enrollment.id}`;
 
   const launchPayment = async () => {
@@ -1610,15 +1614,47 @@ function ClientDrawer({
     const res = await fetch(`${base}/payments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: Number(amount), method, description: desc }),
+      body: JSON.stringify({ amount: Number(amount), method, description: desc, date: paymentDate }),
     });
     const data = await res.json();
     if (res.ok) {
       onApply(data);
       setAmount('');
       setDesc('');
+      setPaymentDate(new Date().toISOString().slice(0, 10));
       toast.success('Pagamento lançado');
     } else toast.error(data.error || 'Erro');
+  };
+
+  const saveAgreedPrice = async () => {
+    const value = Number(priceInput);
+    if (!priceInput || Number.isNaN(value) || value < 0) {
+      toast.error('Informe um valor válido');
+      return;
+    }
+    setSavingPrice(true);
+    try {
+      const res = await fetch(base, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agreedPrice: value }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao salvar');
+      onApply(data);
+      setEditingPrice(false);
+      toast.success('Valor atualizado');
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao salvar');
+    } finally {
+      setSavingPrice(false);
+    }
+  };
+
+  const recalcAgreedPrice = () => {
+    if (!enrollment.composition) return;
+    const suggested = computeSuggestedPrice(exp, enrollment.composition);
+    setPriceInput(String(suggested));
   };
 
   const removePayment = async (paymentId: string) => {
@@ -1685,14 +1721,58 @@ function ClientDrawer({
 
           {/* progressão financeira individual */}
           <div className="bg-gray-50 rounded-lg p-4">
-            <div className="flex justify-between text-sm mb-1">
+            <div className="flex justify-between items-center text-sm mb-1">
               <span className="text-gray-500 flex items-center gap-1">
                 <Wallet size={14} /> Pago
               </span>
-              <span className="font-bold text-emerald-600">
-                {formatBRL(enrollment.paid)} / {formatBRL(enrollment.agreedPrice)}
-              </span>
+              {!editingPrice ? (
+                <span className="flex items-center gap-2">
+                  <span className="font-bold text-emerald-600">
+                    {formatBRL(enrollment.paid)} / {formatBRL(enrollment.agreedPrice)}
+                  </span>
+                  <button
+                    onClick={() => { setPriceInput(String(enrollment.agreedPrice)); setEditingPrice(true); }}
+                    title="Editar valor total do cliente"
+                    className="p-1 hover:bg-white rounded"
+                  >
+                    <Pencil size={12} className="text-gray-400" />
+                  </button>
+                </span>
+              ) : null}
             </div>
+            {editingPrice && (
+              <div className="mb-2 space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    className="input flex-1"
+                    value={priceInput}
+                    onChange={(e) => setPriceInput(e.target.value)}
+                  />
+                  {enrollment.composition && (
+                    <button
+                      onClick={recalcAgreedPrice}
+                      title="Recalcular pelo preço atual da expedição"
+                      className="btn btn-secondary px-3"
+                    >
+                      Recalcular
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={saveAgreedPrice} disabled={savingPrice} className="btn btn-primary flex-1">
+                    {savingPrice ? 'Salvando...' : 'Salvar valor'}
+                  </button>
+                  <button onClick={() => setEditingPrice(false)} className="btn btn-secondary flex-1">
+                    Cancelar
+                  </button>
+                </div>
+                <p className="text-[11px] text-gray-400">
+                  Ajuste manual (ex: cobranças extras não cadastradas, como camisetas) ou clique em
+                  "Recalcular" pra puxar o valor atual da tabela de preços da expedição.
+                </p>
+              </div>
+            )}
             <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
               <div
                 className="bg-emerald-500 h-full transition-all"
@@ -1710,13 +1790,24 @@ function ClientDrawer({
               <DollarSign size={16} /> Lançar Pagamento
             </h3>
             <div className="space-y-2">
-              <input
-                type="number"
-                className="input"
-                placeholder="Valor (R$)"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="number"
+                  className="input"
+                  placeholder="Valor (R$)"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+                <div>
+                  <label className="text-[11px] text-gray-400">Data do pagamento</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={paymentDate}
+                    onChange={(e) => setPaymentDate(e.target.value)}
+                  />
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <select className="input" value={method} onChange={(e) => setMethod(e.target.value)}>
                   <option value="pix">PIX</option>
